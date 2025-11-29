@@ -91,7 +91,7 @@ export async function createToneOfVoiceDocument(initiativeId: string): Promise<D
   const payload = await client.createDocument({
     title: TONE_OF_VOICE_TITLE,
     content: DEFAULT_TONE_OF_VOICE_CONTENT,
-    projectId: initiativeId,
+    initiativeId,
   });
   
   if (!payload.success || !payload.document) {

@@ -124,4 +124,28 @@ In this project, so far you've added an API route every time you needed to fetch
 
 There's a bug I want to debug. When onboarding, as soon as it tries to create the tone of voice document, it fails, seemingly with the wrong project ID (for the initiative). I'm going to use the simplified structure that the vibe coding prompt left me with to debug this.
 
-Kiro actually did a great job with this migration task. Everything seems to work as before and we now have server actions, instead of API routes. I'm interested to see if it's going to keep setting up API routes for future tasks.
+Kiro actually did a great job with this migration task. Everything seems to work as before and we now have server actions, instead of API routes. I'm interested to see if it's going to keep setting up API routes for future tasks. It is also by far the fastest tool I've used. I've noticed it has an unsafe file edit function. Instead of checking like Claude Code or Cursor do, it just overwrites whatever is currently in the file. This makes it not a great companion for coding alongside, but it speeds it up immensely. I like this trade-off for fully hands-off workflows.
+
+Annoyingly, I read the code that tried to set the tone of voice document up, and it turned out it was the dumbest bug:
+
+```ts
+// Create the document
+const payload = await client.createDocument({
+  title: TONE_OF_VOICE_TITLE,
+  content: DEFAULT_TONE_OF_VOICE_CONTENT,
+  projectId: initiativeId,
+});
+```
+
+Instead of:
+
+```ts
+// Create the document
+const payload = await client.createDocument({
+  title: TONE_OF_VOICE_TITLE,
+  content: DEFAULT_TONE_OF_VOICE_CONTENT,
+  initiativeId,
+});
+```
+
+This clearly failed, since Linear couldn't find a project with our initiative ID. I'm so surprised it failed on something so trivial, while it set some pretty complex workflows up, including an onboarding flow that depends on multiple third-parties playing ball.

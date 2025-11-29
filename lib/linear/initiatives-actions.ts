@@ -136,6 +136,8 @@ export async function createATSContainerToneOfVoice() {
     throw new Error('No ATS Container configured');
   }
 
+  console.log({initiativeId})
+
   const doc = await ensureToneOfVoiceDocument(initiativeId);
   
   return {
