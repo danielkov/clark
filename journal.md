@@ -115,3 +115,13 @@ Anecdotally, it could work really well, if it produced more in-depth specs. It's
 At this point I need to acquire an app ID and token from Linear. I have no idea how to do this. Linear docs are not very forthcoming about this process. I'd expect Kiro to find this out for me and output a guide or something. I'm nervous to ask though. I know it won't search the internet, so the information will most likely be wrong. I'm at 18.37 credits used at this point. I'm afraid it won't finish this tiny project with the 50 credits I have access to.
 
 Another thing I really hate about how Kiro set this project up, is that it adds an API route for everything. In NextJS 16, the only remaining use-case for API routes is if it needs to have a stable URL that makes it accessible for outside use-cases. Most API routes Kiro added do not meet that criteria. I don't know how to make Kiro aware of this. I'm going to try vibe coding a fix for this, because it makes the entire app logic brittle to file renames and adds needless maintenance overhead.
+
+I've used this prompt to get it to refactor our unnecessary API routes:
+
+```
+In this project, so far you've added an API route every time you needed to fetch data for the client. In NextJS 16 the only valid use case for an API route is if we want to explicitly expose that endpoint to an outside actor. For data fetching, you should do it top-level in async function components in routes, for actions, we should create an api.ts file with "use server" that can be used to expose individual functions, that can be called from the client. Go through each API route, determine if they should be an API route. For authentication (callbacks) and webhook-related endpoint, they need to have a stable URL for third-party apps to call. For everything else, move the logic over to just server functions and remove the unnecessary API routes.
+```
+
+There's a bug I want to debug. When onboarding, as soon as it tries to create the tone of voice document, it fails, seemingly with the wrong project ID (for the initiative). I'm going to use the simplified structure that the vibe coding prompt left me with to debug this.
+
+Kiro actually did a great job with this migration task. Everything seems to work as before and we now have server actions, instead of API routes. I'm interested to see if it's going to keep setting up API routes for future tasks.

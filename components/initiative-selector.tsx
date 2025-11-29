@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import { getInitiatives, createNewInitiative, completeInitiativeSetup } from '@/lib/linear/initiatives-actions';
 
 interface Initiative {
   id: string;
@@ -40,14 +41,8 @@ export function InitiativeSelector() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/initiatives');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch initiatives');
-      }
-      
-      const data = await response.json();
-      setInitiatives(data.initiatives);
+      const initiatives = await getInitiatives();
+      setInitiatives(initiatives);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -67,26 +62,14 @@ export function InitiativeSelector() {
       setSubmitting(true);
       setError(null);
       
-      const response = await fetch('/api/initiatives', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: newInitiativeName,
-          description: newInitiativeDescription || undefined,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create initiative');
-      }
-      
-      const data = await response.json();
+      const initiative = await createNewInitiative(
+        newInitiativeName,
+        newInitiativeDescription || undefined
+      );
       
       // Add new initiative to list and select it
-      setInitiatives([...initiatives, data.initiative]);
-      setSelectedId(data.initiative.id);
+      setInitiatives([...initiatives, initiative]);
+      setSelectedId(initiative.id);
       setShowCreateForm(false);
       setNewInitiativeName('');
       setNewInitiativeDescription('');
@@ -107,19 +90,7 @@ export function InitiativeSelector() {
       setSubmitting(true);
       setError(null);
       
-      const response = await fetch('/api/initiatives/complete-setup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          initiativeId: selectedId,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to complete setup');
-      }
+      await completeInitiativeSetup(selectedId);
       
       // Call onComplete callback if provided
       if (onComplete) {

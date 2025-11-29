@@ -1,83 +1,79 @@
-# Linear Integration Migration to WorkOS Metadata
+# API Routes to Server Actions Migration
 
-## Summary
-
-The Linear integration has been rewritten to use WorkOS user metadata for storing OAuth tokens instead of cookies/sessions.
+## Overview
+Migrated from Next.js API routes to server actions for internal data fetching and mutations, keeping API routes only for OAuth callbacks and webhooks that require stable URLs.
 
 ## Changes Made
 
-### New Files Created
+### Kept as API Routes (Stable URLs Required)
+These routes need to remain as API routes because they're called by third-party services:
 
-1. **lib/linear/metadata.ts** - WorkOS metadata management
-   - `storeLinearTokens()` - Store tokens in user metadata
-   - `getLinearTokens()` - Retrieve tokens from user metadata
-   - `isLinearTokenExpired()` - Check token expiration
-   - `removeLinearTokens()` - Remove tokens (disconnect)
+- `/api/auth/login` - WorkOS authentication redirect
+- `/api/auth/callback` - WorkOS OAuth callback handler
+- `/api/linear/authorize` - Linear OAuth authorization redirect
+- `/api/linear/callback` - Linear OAuth callback handler
 
-2. **app/api/linear/disconnect/route.ts** - Disconnect endpoint
-   - Revokes Linear tokens
-   - Removes tokens from WorkOS metadata
+### Converted to Server Actions
 
-3. **app/api/linear/status/route.ts** - Connection status endpoint
-   - Returns whether user has Linear connected
+#### Created New Server Action Files
 
-### Modified Files
+1. **`lib/linear/actions.ts`** - Linear integration actions
+   - `getLinearConnectionStatus()` - Check if user has Linear connected
+   - `disconnectLinear()` - Disconnect Linear integration
 
-1. **lib/linear/client.ts**
-   - Removed session dependencies
-   - Now uses WorkOS metadata via `getLinearTokens()`
-   - Added `hasLinearConnected()` helper function
+2. **`lib/linear/initiatives-actions.ts`** - Initiative management actions
+   - `getInitiatives()` - Fetch all initiatives
+   - `createNewInitiative(name, description)` - Create new initiative
+   - `setInitiativeAsATSContainer(initiativeId)` - Set ATS container
+   - `completeInitiativeSetup(initiativeId)` - Complete setup with tone of voice doc
 
-2. **app/api/linear/callback/route.ts**
-   - Removed session update logic
-   - Now stores tokens in WorkOS metadata via `storeLinearTokens()`
+#### Removed API Routes
+- ❌ `/api/initiatives` (GET/POST)
+- ❌ `/api/initiatives/set-container` (POST)
+- ❌ `/api/initiatives/complete-setup` (POST)
+- ❌ `/api/linear/disconnect` (POST)
+- ❌ `/api/linear/status` (GET)
 
-3. **app/api/linear/authorize/route.ts**
-   - Removed session dependencies
-   - Uses `withAuth()` directly for user authentication
-
-4. **lib/linear/README.md**
-   - Updated documentation to reflect new architecture
-   - Added usage examples for metadata functions
+#### Updated Components
+- **`components/initiative-selector.tsx`** - Now uses server actions instead of fetch calls
 
 ## Benefits
 
-- **No cookie size limits** - Tokens stored server-side in WorkOS
-- **Centralized user data** - All user metadata in one place
-- **Better security** - Tokens never exposed to client
-- **Simpler architecture** - No session management needed
-- **Scalable** - Works across multiple servers/instances
+1. **Better Performance** - Server actions eliminate unnecessary network roundtrips
+2. **Type Safety** - Direct function calls with TypeScript types
+3. **Simpler Code** - No need for JSON serialization/deserialization
+4. **Proper Architecture** - API routes only for external integrations
+5. **Better DX** - Easier to test and maintain
 
-## API Endpoints
+## Migration Pattern
 
-- `GET /api/linear/authorize` - Start OAuth flow
-- `GET /api/linear/callback` - OAuth callback handler
-- `POST /api/linear/disconnect` - Disconnect Linear
-- `GET /api/linear/status` - Check connection status
+### Before (API Route)
+```typescript
+// API Route
+export async function GET() {
+  const { user } = await withAuth();
+  const data = await fetchData();
+  return NextResponse.json({ data });
+}
+
+// Client Component
+const response = await fetch('/api/endpoint');
+const { data } = await response.json();
+```
+
+### After (Server Action)
+```typescript
+// Server Action
+'use server';
+export async function getData() {
+  const { user } = await withAuth();
+  return await fetchData();
+}
+
+// Client Component
+import { getData } from '@/lib/actions';
+const data = await getData();
+```
 
 ## Testing
-
-To test the integration:
-
-1. Ensure WorkOS credentials are configured in `.env`
-2. Start the dev server: `npm run dev`
-3. Navigate to `/api/linear/authorize`
-4. Complete Linear OAuth flow
-5. Tokens will be stored in WorkOS user metadata
-6. Check status at `/api/linear/status`
-
-## Migration Steps (if upgrading)
-
-1. No database migration needed
-2. Existing session-based tokens will be ignored
-3. Users will need to reconnect Linear (one-time)
-4. Old session code can be safely removed
-
-## Dependencies
-
-- `@workos-inc/node` - Already installed (v7.74.2)
-- `@workos-inc/authkit-nextjs` - Already installed (v2.11.1)
-
-## Reference
-
-WorkOS Metadata Documentation: https://workos.com/docs/authkit/metadata/exposing-metadata-in-jwts
+All functionality remains the same - only the implementation changed. Test the onboarding flow to ensure initiative selection and creation still works correctly.
