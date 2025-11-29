@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "API Key Leak Checker",
+  "description": "Scans staged files before commit to detect potential API keys, tokens, and other sensitive credentials that should not be committed to version control",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Scan all staged git files for potential API keys, tokens, passwords, and other sensitive credentials. Look for patterns like:\n- API keys (strings like 'sk_live_', 'pk_test_', 'api_key', etc.)\n- AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)\n- Private keys (BEGIN PRIVATE KEY, BEGIN RSA PRIVATE KEY)\n- OAuth tokens and secrets\n- Database connection strings with passwords\n- Any hardcoded secrets or credentials\n\nCheck the git staged files and report any findings. If sensitive data is found, warn the user and suggest moving them to environment variables or .env files that are gitignored. If no issues are found, confirm it's safe to commit."
+  }
+}
