@@ -19,6 +19,9 @@ This document specifies the requirements for an AI-enriched Applicant Tracking S
 - **Tone of Voice Document**: A Linear Document defining the organization's communication style for job descriptions
 - **AI Pre-screening Agent**: Automated system component that evaluates candidate fit using AI
 - **NextJS**: Full-stack React framework used for building the application
+- **Datadog**: Observability platform providing monitoring, logging, tracing, and alerting capabilities
+- **APM**: Application Performance Monitoring - Datadog's distributed tracing system for tracking requests across services
+- **Correlation ID**: Unique identifier attached to requests for tracing operations across system components
 
 ## Requirements
 
@@ -85,3 +88,16 @@ This document specifies the requirements for an AI-enriched Applicant Tracking S
 3. WHEN the CV content is extracted, THE ATS SHALL append the text content to the Linear Issue description separated by a line break
 4. WHEN an applicant uploads a CV file, THE ATS SHALL also store the file as a Linear Document attachment for human recruiter access
 5. WHEN generating job descriptions, THE ATS SHALL use the Cerebras llama-3.3-70b model with appropriate temperature and token settings for consistent, high-quality output
+
+### Requirement 6
+
+**User Story:** As a system operator, I want comprehensive observability through Datadog, so that I can monitor system health, debug issues, and track performance metrics.
+
+#### Acceptance Criteria
+
+1. WHEN any API request is processed, THE ATS SHALL send request metrics to Datadog including duration, status code, and endpoint
+2. WHEN any error occurs in the system, THE ATS SHALL log the error to Datadog with full context including stack trace, correlation ID, and relevant metadata
+3. WHEN AI operations are executed, THE ATS SHALL track custom metrics in Datadog including LLM latency, token usage, and operation success rate
+4. WHEN webhook events are received, THE ATS SHALL log webhook processing metrics to Datadog including event type, processing duration, and outcome
+5. WHEN the application starts, THE ATS SHALL initialize Datadog APM tracing to capture distributed traces across all service calls
+6. WHEN critical operations fail, THE ATS SHALL emit Datadog events that can trigger alerts for on-call engineers

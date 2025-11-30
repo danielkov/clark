@@ -143,7 +143,39 @@ Cerebras API (Compare & Score) → Update Issue State → Add Reasoning Comment
 - `determineIssueState()`: Maps AI confidence to Linear workflow state
 - `generateReasoningComment()`: Creates human-readable explanation
 
-### 5. Data Models
+### 5. Monitoring Module (Datadog)
+
+**Datadog Integration**
+- `initializeDatadog()`: Initializes Datadog APM tracer with service configuration
+- `datadogMiddleware()`: NextJS middleware for automatic request tracing and metrics
+- `tracer`: Datadog tracer instance for manual span creation
+
+**Metrics Tracking**
+- `trackAPIRequest()`: Records API request metrics (duration, status, endpoint)
+- `trackAIOperation()`: Records AI operation metrics (latency, tokens, success/failure)
+- `trackWebhookProcessing()`: Records webhook processing metrics (type, duration, outcome)
+- `trackJobView()`: Records job listing view metrics
+- `trackApplicationSubmission()`: Records application submission metrics
+
+**Logging Utilities**
+- `logger`: Structured logger with Datadog integration
+- `logger.info()`: Info-level logging with correlation ID
+- `logger.error()`: Error logging with stack trace and context
+- `logger.warn()`: Warning-level logging
+- `logger.debug()`: Debug-level logging
+- `withCorrelationId()`: Middleware to attach correlation IDs to requests
+
+**Event Emission**
+- `emitDatadogEvent()`: Emits custom Datadog events for alerting
+- `emitCriticalFailure()`: Emits critical failure events with high priority
+- `emitSecurityEvent()`: Emits security-related events (auth failures, webhook tampering)
+
+**Tracing Utilities**
+- `createSpan()`: Creates custom trace span for specific operations
+- `addSpanTags()`: Adds metadata tags to current span
+- `recordException()`: Records exception in current span
+
+### 6. Data Models
 
 **User Session**
 ```typescript
@@ -280,6 +312,30 @@ interface ScreeningResult {
 ### Property 21: Consistent model configuration for job descriptions
 *For any* job description generation request, the system should use the Cerebras llama-3.3-70b model with temperature 0.2 for consistent output quality.
 **Validates: Requirements 5.5**
+
+### Property 22: API request metrics to Datadog
+*For any* API request processed by the system, metrics including duration, status code, and endpoint should be sent to Datadog.
+**Validates: Requirements 6.1**
+
+### Property 23: Error logging to Datadog
+*For any* error that occurs in the system, the error should be logged to Datadog with full context including stack trace, correlation ID, and relevant metadata.
+**Validates: Requirements 6.2**
+
+### Property 24: AI operation metrics tracking
+*For any* AI operation executed (job description generation or candidate screening), custom metrics including LLM latency, token usage, and operation success rate should be tracked in Datadog.
+**Validates: Requirements 6.3**
+
+### Property 25: Webhook processing metrics
+*For any* webhook event received from Linear, processing metrics including event type, processing duration, and outcome should be logged to Datadog.
+**Validates: Requirements 6.4**
+
+### Property 26: Datadog APM initialization
+*For any* application startup, Datadog APM tracing should be initialized to capture distributed traces across all service calls.
+**Validates: Requirements 6.5**
+
+### Property 27: Critical failure events
+*For any* critical operation failure, a Datadog event should be emitted that can trigger alerts for on-call engineers.
+**Validates: Requirements 6.6**
 
 ## Error Handling
 
@@ -484,11 +540,44 @@ Integration tests will verify end-to-end workflows:
 - Use connection pooling (PgBouncer)
 - Configure read replicas for scaling
 
-### Monitoring & Observability
-- Implement structured logging with correlation IDs
-- Track key metrics: webhook processing time, AI operation latency, job listing views
-- Set up alerts for error rates and performance degradation
-- Implement distributed tracing for debugging
+### Monitoring & Observability (Datadog)
+
+**Datadog Integration**
+- Initialize Datadog APM tracer on application startup
+- Configure Datadog SDK with service name, environment, and version tags
+- Use dd-trace for automatic instrumentation of HTTP requests, database queries, and external API calls
+
+**Metrics Collection**
+- Track API request metrics: duration, status code, endpoint, user ID
+- Monitor AI operation metrics: LLM latency, token usage, success/failure rate, model used
+- Track webhook processing metrics: event type, processing duration, success/failure outcome
+- Monitor job listing metrics: view counts, application submission rates
+- Track authentication metrics: login success/failure, token refresh rates
+
+**Logging Strategy**
+- Implement structured logging with correlation IDs for request tracing
+- Log all errors with full context: stack trace, correlation ID, user ID, request parameters
+- Log security events: webhook signature failures, authentication failures, rate limit violations
+- Log AI operations: prompts (sanitized), responses (truncated), latency, token counts
+- Use Datadog log levels: DEBUG, INFO, WARN, ERROR, CRITICAL
+
+**Distributed Tracing**
+- Trace complete workflows: onboarding, job publication, application submission, AI pre-screening
+- Propagate correlation IDs across service boundaries (Linear API, Cerebras API, WorkOS)
+- Tag traces with relevant metadata: user ID, organization ID, job ID, candidate ID
+
+**Alerting**
+- Configure alerts for error rate thresholds (>5% error rate over 5 minutes)
+- Alert on AI operation failures (>10% failure rate over 10 minutes)
+- Alert on webhook processing delays (>30 seconds average processing time)
+- Alert on authentication failures (>20 failures per minute)
+- Emit Datadog events for critical failures to trigger PagerDuty/Slack notifications
+
+**Dashboards**
+- Create dashboard for API performance: request rates, latency percentiles, error rates
+- Create dashboard for AI operations: LLM latency, token usage trends, success rates
+- Create dashboard for webhook processing: event volumes, processing times, failure rates
+- Create dashboard for business metrics: job views, application submissions, candidate pipeline
 
 ### Scalability
 - Horizontal scaling of NextJS instances
