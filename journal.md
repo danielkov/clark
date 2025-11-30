@@ -304,3 +304,13 @@ I decided to pivot from using LiquidMetal to instead using Cerebras for inferenc
 I wasn't sure if this would work. Updating existing spec, plan, etc isn't listed as one of the features of this mode. Seems like it did a good enough job initially. One thing that stood out, is it's hell-bent on adding caching for every expensive operation. We don't have a database, so it just adds caching to everything without any explanation. This is weird behaviour and I suspect the system prompt has a clause about caching expensive operations, but since we don't have an official database, the model just slaps "cache this" on things without knowing how.
 
 One thing I really liked, is that when it updates the plan, it looks at the project state. E.g.: I installed the required dependencies for PDF and DOCX processing while it was updating the spec and it saw that these were already added, so it moved them to the setup step, which is already marked as completed.
+
+I ran the update tasks process and it failed with this error:
+
+```
+Failed to replace text in .kiro/specs/ai-ats-linear-integration/tasks.md. Invalid operation - missing newStr. Try again with a valid newStr. Set newStr to the empty string '' to delete oldStr.. The agent has seen this error and will try a different approach to write the file if needed.
+```
+
+This is the first time I saw Kiro fail to edit a file. It's extremely reliable compared to something like Claude Code, which fails 30-50% of the time, or Cursor, that fails to write files 10-20% of the time. Unfortunately, it was not able to recover from this, the agent panel froze and no progress was made for 5+ minutes. I decided to stop it manually and try again.
+
+It ended up re-writing the entire tasks.md file. I was too lazy to read it all, so I just accepted and moved on.

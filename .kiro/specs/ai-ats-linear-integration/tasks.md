@@ -92,13 +92,13 @@
     - Design prompt template using Project description and Tone of Voice
     - Implement error handling and retry logic for LLM calls
     - Use llama-3.3-70b model with temperature 0.2
-    - _Requirements: 2.4, 5.1, 5.4_
+    - _Requirements: 2.4, 5.1, 5.5_
   
-  - [ ] 5.2 Implement AI generation trigger logic
-    - Create checkAIGeneratedLabel function to verify label presence
-    - Implement logic to trigger generation for unlabeled "In Progress" Projects
-    - Create updateProjectDescription function to update Linear Project
-    - Implement label application after successful generation
+  - [x] 5.2 Implement AI generation trigger logic via webhook
+    - Implement webhook handler to detect Projects with "enhance" label
+    - Implement logic to trigger generation for Projects with "enhance" label
+    - Update Project content with enhanced description
+    - Apply "ai-generated" label and remove "enhance" label after successful generation
     - _Requirements: 2.3, 2.4, 2.5_
   
   - [ ]* 5.3 Write property test for AI generation trigger
@@ -123,59 +123,59 @@
     - **Property 21: Consistent model configuration for job descriptions**
     - **Validates: Requirements 5.5**
 
-- [ ] 6. Checkpoint - Ensure all tests pass
-  - Ensure all tests pass, ask the user if questions arise.
-
-- [ ] 7. Implement Linear webhook handling
-  - [ ] 7.1 Create webhook infrastructure
+- [x] 6. Implement Linear webhook handling
+  - [x] 6.1 Create webhook infrastructure
     - Implement POST /api/webhooks/linear endpoint
     - Create webhook signature verification using HMAC
     - Implement webhook event routing to appropriate handlers
-    - Add replay attack prevention using timestamps
     - _Requirements: 2.6_
   
-  - [ ] 7.2 Implement webhook event handlers
-    - Create handler for Project status change events
-    - Create handler for Project description update events
-    - Create handler for Issue creation events
-    - Implement cache invalidation on relevant events
+  - [x] 6.2 Implement webhook event handlers
+    - Create handler for Project update events (AI enhancement trigger)
+    - Create handler for Issue creation events (placeholder for AI pre-screening)
     - _Requirements: 2.6, 4.1_
   
-  - [ ]* 7.3 Write unit tests for webhook handling
+  - [ ] 6.3 Add replay attack prevention
+    - Implement timestamp validation in webhook handler
+    - Reject webhooks with timestamps older than 5 minutes
+    - _Requirements: 2.6_
+  
+  - [ ]* 6.4 Write unit tests for webhook handling
     - Test signature verification with valid and tampered signatures
     - Test event routing to correct handlers
     - Test replay attack prevention
     - _Requirements: 2.6_
 
-- [x] 8. Implement application submission and validation
-  - [x] 8.1 Create application form component
+- [x] 7. Implement application submission and validation
+  - [x] 7.1 Create application form component
     - Build React form component with Name, Email, CV, and Cover Letter fields
     - Implement client-side validation with real-time feedback
     - Add file upload handling with drag-and-drop support
     - Implement file type and size validation (PDF, DOC, DOCX, max 10MB)
     - _Requirements: 3.1_
   
-  - [x] 8.2 Create application submission API
+  - [x] 7.2 Create application submission API
     - Create validateApplication server function with email format and required field checks
     - Implement error response with specific field-level error messages
     - _Requirements: 3.1, 3.2_
   
-  - [ ]* 8.3 Write property test for application validation
+  - [ ]* 7.3 Write property test for application validation
     - **Property 8: Application validation rules**
     - **Validates: Requirements 3.1**
   
-  - [ ]* 8.4 Write property test for validation failure handling
+  - [ ]* 7.4 Write property test for validation failure handling
     - **Property 9: Validation failure prevents submission**
     - **Validates: Requirements 3.2**
   
-  - [ ]* 8.5 Write unit tests for application form
+  - [ ]* 7.5 Write unit tests for application form
     - Test form validation with boundary cases (empty strings, whitespace)
     - Test file upload with various file types and sizes
     - Test error message display
     - _Requirements: 3.1, 3.2_
 
-- [ ] 9. Implement candidate Issue creation with CV parsing
-  - [ ] 9.1 Create CV parsing module
+- [ ] 8. Implement candidate Issue creation with CV parsing
+  - [ ] 8.1 Create CV parsing module
+    - Create lib/linear/cv-parser.ts file
     - Create parseCV function that accepts file buffer and file type
     - Implement PDF parsing using pdf-parse library
     - Implement DOC/DOCX parsing using mammoth library
@@ -184,82 +184,91 @@
     - Return extracted text content as string
     - _Requirements: 5.2_
   
-  - [ ] 9.2 Update Linear Issue creation workflow
-    - Update createCandidateIssue function to accept parsed CV text
+  - [ ] 8.2 Update Linear Issue creation workflow
+    - Update createCandidateIssue function in lib/linear/issues.ts to accept parsed CV text parameter
     - Append parsed CV text to Issue description after a line break
-    - Implement CV upload as Linear Document attachment linked to Issue
-    - Implement cover letter upload as Linear Document attachment (conditional)
-    - Set Issue state to "Triage" on creation
+    - Keep existing CV upload as Linear attachment (already implemented)
+    - Keep existing cover letter upload logic (already implemented)
+    - Issue state "Triage" assignment already implemented
     - _Requirements: 3.3, 3.4, 3.5, 3.6, 5.3, 5.4_
   
-  - [ ] 9.3 Update application submission flow
+  - [ ] 8.3 Update application submission flow
     - Update submitApplication in lib/actions/application.ts
     - Parse CV file using parseCV before creating Issue
     - Pass parsed CV text to createCandidateIssue
     - Handle parsing errors gracefully (create Issue without CV text if parsing fails)
     - _Requirements: 3.3, 5.2, 5.3_
   
-  - [ ]* 9.4 Write property test for Issue creation
+  - [ ]* 8.4 Write property test for Issue creation
     - **Property 10: Issue creation for valid applications**
     - **Validates: Requirements 3.3**
   
-  - [ ]* 9.5 Write property test for document attachment
+  - [ ]* 8.5 Write property test for document attachment
     - **Property 11: Document attachment for applications**
     - **Validates: Requirements 3.4, 3.5**
   
-  - [ ]* 9.6 Write property test for initial Issue state
+  - [ ]* 8.6 Write property test for initial Issue state
     - **Property 12: Initial Issue state assignment**
     - **Validates: Requirements 3.6**
   
-  - [ ]* 9.7 Write property test for CV parsing
+  - [ ]* 8.7 Write property test for CV parsing
     - **Property 18: CV parsing on upload**
     - **Validates: Requirements 5.2**
   
-  - [ ]* 9.8 Write property test for CV content in Issue
+  - [ ]* 8.8 Write property test for CV content in Issue
     - **Property 19: CV content in Issue description**
     - **Validates: Requirements 5.3**
   
-  - [ ]* 9.9 Write property test for Linear Document attachment
+  - [ ]* 8.9 Write property test for Linear Document attachment
     - **Property 20: Linear Document attachment for human access**
     - **Validates: Requirements 5.4**
   
-  - [ ]* 9.10 Write unit tests for CV parsing
+  - [ ]* 8.10 Write unit tests for CV parsing
     - Test PDF parsing with sample PDF files
     - Test DOC/DOCX parsing with sample Word files
     - Test error handling for corrupted files
     - Test file type detection
     - _Requirements: 5.2_
 
-- [ ] 10. Checkpoint - Ensure all tests pass
+- [ ] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Implement AI pre-screening agent
-  - [ ] 11.1 Create AI screening logic
+- [ ] 10. Implement AI pre-screening agent
+  - [ ] 10.1 Create AI screening logic
+    - Create lib/cerebras/candidate-screening.ts file
     - Implement screenCandidate function using Cerebras API
     - Design prompt template for candidate evaluation with Issue description (contains CV) and Job Description
     - Use llama-3.3-70b model for screening
-    - Create evaluateCandidateFit function to parse LLM response
-    - Implement confidence scoring logic (high/low/ambiguous)
+    - Parse LLM response to extract confidence level (high/low/ambiguous) and reasoning
+    - Return structured screening result with confidence and reasoning
     - _Requirements: 4.2, 5.1_
   
-  - [ ] 11.2 Implement screening workflow
-    - Create triggerPreScreening function called on Issue creation
+  - [ ] 10.2 Implement screening workflow integration
+    - Create lib/linear/pre-screening.ts file
+    - Implement triggerPreScreening function called on Issue creation
     - Implement check for "In Progress" Project status before triggering
     - Read Issue description directly (contains parsed CV text)
     - Retrieve Job Description from Linear Project
     - Call screenCandidate with Issue description and Job Description
     - _Requirements: 4.1, 4.2_
   
-  - [ ]* 11.3 Write property test for AI pre-screening trigger
+  - [ ] 10.3 Update webhook handler for Issue creation
+    - Update handleIssueCreation in app/api/webhooks/linear/route.ts
+    - Call triggerPreScreening when new Issue is created
+    - Handle screening errors gracefully (log and continue)
+    - _Requirements: 4.1_
+  
+  - [ ]* 10.4 Write property test for AI pre-screening trigger
     - **Property 13: AI Pre-screening trigger for active Projects**
     - **Validates: Requirements 4.1**
   
-  - [ ]* 11.4 Write property test for AI screening inputs
+  - [ ]* 10.5 Write property test for AI screening inputs
     - **Property 14: AI screening inputs**
     - **Validates: Requirements 4.2**
 
-- [ ] 12. Implement Issue state management based on AI results
-  - [ ] 12.1 Create state transition logic
+- [ ] 11. Implement Issue state management based on AI results
+  - [ ] 11.1 Create state transition logic
+    - Create lib/linear/state-management.ts file
     - Implement determineIssueState function mapping confidence to states
     - Create updateIssueState function using Linear SDK
     - Implement state transition: high confidence → "Screening"
@@ -267,64 +276,73 @@
     - Implement state transition: ambiguous → "Triage" (no change)
     - _Requirements: 4.3, 4.4, 4.5_
   
-  - [ ] 12.2 Implement AI reasoning comments
+  - [ ] 11.2 Implement AI reasoning comments
     - Create generateReasoningComment function formatting AI output
     - Implement addIssueComment function using Linear SDK
     - Include specific evidence from CV in comment
     - Add comment whenever state transition occurs
     - _Requirements: 4.6_
   
-  - [ ]* 12.3 Write property test for confidence-to-state mapping
+  - [ ] 11.3 Integrate state management with pre-screening
+    - Update triggerPreScreening in lib/linear/pre-screening.ts
+    - Call determineIssueState with screening result
+    - Call updateIssueState to transition Issue
+    - Call addIssueComment to add AI reasoning
+    - _Requirements: 4.3, 4.4, 4.5, 4.6_
+  
+  - [ ]* 11.4 Write property test for confidence-to-state mapping
     - **Property 15: AI confidence maps to Issue state**
     - **Validates: Requirements 4.3, 4.4, 4.5**
   
-  - [ ]* 12.4 Write property test for AI reasoning comments
+  - [ ]* 11.5 Write property test for AI reasoning comments
     - **Property 16: AI reasoning comment on state transition**
     - **Validates: Requirements 4.6**
   
-  - [ ]* 12.5 Write unit tests for state management
+  - [ ]* 11.6 Write unit tests for state management
     - Test state transitions with various confidence scores
     - Test comment formatting with different AI outputs
     - Test error handling for state transition failures
     - _Requirements: 4.3, 4.4, 4.5, 4.6_
 
+- [ ] 12. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
 
-
-- [ ] 14. Implement error handling and resilience
-  - [ ] 14.1 Add comprehensive error handling
-    - Implement exponential backoff for Linear API rate limiting
-    - Add retry logic for network failures (max 3 attempts)
-    - Implement fallback to manual triage for AI service failures
-    - Add virus scanning for uploaded files
-    - Create user-friendly error messages for all error types
+- [ ] 13. Implement error handling and resilience
+  - [ ] 13.1 Add comprehensive error handling
+    - Create lib/utils/retry.ts with exponential backoff utility
+    - Implement retry logic for Linear API calls (max 3 attempts)
+    - Add retry logic to Cerebras API calls in job-description.ts and candidate-screening.ts
+    - Implement fallback to manual triage for AI service failures in pre-screening
+    - Add user-friendly error messages for all error types
     - _Requirements: All_
   
-  - [ ]* 14.2 Write unit tests for error handling
+  - [ ]* 13.2 Write unit tests for error handling
     - Test retry logic with simulated failures
     - Test fallback behavior for AI timeouts
     - Test error message formatting
     - _Requirements: All_
 
-- [ ] 15. Implement monitoring and logging
-  - [ ] 15.1 Add structured logging
-    - Implement correlation IDs for request tracing
-    - Add logging for all webhook events
-    - Log AI operation latency and results
-    - Create security event logging for webhook signature failures
+- [ ] 14. Implement monitoring and logging
+  - [ ] 14.1 Add structured logging
+    - Create lib/utils/logger.ts with correlation ID support
+    - Add correlation IDs for request tracing in webhook handler
+    - Enhance logging for all webhook events with structured data
+    - Log AI operation latency and results in job description and screening
+    - Add security event logging for webhook signature failures
     - _Requirements: All_
   
-  - [ ] 15.2 Add performance monitoring
+  - [ ] 14.2 Add performance monitoring
     - Track webhook processing time metrics
     - Monitor AI operation latency
     - Track job listing view counts
-    - Implement health check endpoints
+    - Create app/api/health/route.ts for health check endpoint
     - _Requirements: All_
 
-- [ ] 16. Final checkpoint - Ensure all tests pass
+- [ ] 15. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 17. Integration and end-to-end testing
-  - [ ]* 17.1 Write integration tests for complete workflows
+- [ ] 16. Integration and end-to-end testing
+  - [ ]* 16.1 Write integration tests for complete workflows
     - Test complete onboarding flow from WorkOS to Linear setup
     - Test job publication flow from Project status change to public display
     - Test application submission flow from form to AI pre-screening
