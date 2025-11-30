@@ -4,6 +4,8 @@
  * Provides retry logic for API calls with exponential backoff
  */
 
+import { logger } from '@/lib/datadog/logger';
+
 export interface RetryOptions {
   maxAttempts?: number;
   initialDelayMs?: number;
@@ -79,10 +81,12 @@ export async function withRetry<T>(
         opts.backoffMultiplier
       );
 
-      console.log(
-        `Retry attempt ${attempt}/${opts.maxAttempts} failed. Retrying in ${delay}ms...`,
-        error instanceof Error ? error.message : String(error)
-      );
+      logger.warn('Retry attempt failed, retrying', {
+        attempt,
+        maxAttempts: opts.maxAttempts,
+        delayMs: delay,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
 
       await sleep(delay);
     }

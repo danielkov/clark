@@ -4,7 +4,6 @@
  * Server Actions for Linear Integration
  */
 
-import { withAuth } from '@workos-inc/authkit-nextjs';
 import { getLinearTokens, removeLinearTokens } from './metadata';
 import { revokeLinearToken } from './oauth';
 
@@ -12,6 +11,7 @@ import { revokeLinearToken } from './oauth';
  * Check if user has Linear connected
  */
 export async function getLinearConnectionStatus() {
+  const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
   
   if (!user) {
@@ -26,6 +26,7 @@ export async function getLinearConnectionStatus() {
  * Disconnect Linear integration
  */
 export async function disconnectLinear() {
+  const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
   
   if (!user) {

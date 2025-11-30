@@ -2,6 +2,9 @@
 
 import { cerebras } from "./client";
 import { ScreeningResult } from "@/types";
+import { trackAIOperation, measureDuration } from "@/lib/datadog/metrics";
+import { logger } from "@/lib/datadog/logger";
+import { emitAIOperationFailure } from "@/lib/datadog/events";
 
 const systemPrompt = `You are an expert technical recruiter and candidate screening specialist. Your task is to evaluate whether a candidate is a good fit for a specific job opening based on their CV and the job description.
 
@@ -54,27 +57,38 @@ export async function screenCandidate(
   cvContent: string,
   jobDescription: string
 ): Promise<ScreeningResult> {
+  const startTime = Date.now();
+  let success = false;
+  let errorType: string | undefined;
+
   try {
-    const completion = await cerebras.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: `Job Description:\n\n${jobDescription}\n\n---\n\nCandidate CV:\n\n${cvContent}`,
-        },
-      ],
-      model: "llama-3.3-70b",
-      max_completion_tokens: 2048,
-      temperature: 0.2,
-      top_p: 1,
-      stream: false,
-      response_format: {
-        type: "json_object",
-      },
+    logger.info('Starting candidate screening', {
+      cvContentLength: cvContent.length,
+      jobDescriptionLength: jobDescription.length,
     });
+
+    const { result: completion, duration } = await measureDuration(() =>
+      cerebras.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: `Job Description:\n\n${jobDescription}\n\n---\n\nCandidate CV:\n\n${cvContent}`,
+          },
+        ],
+        model: "llama-3.3-70b",
+        max_completion_tokens: 2048,
+        temperature: 0.2,
+        top_p: 1,
+        stream: false,
+        response_format: {
+          type: "json_object",
+        },
+      })
+    );
 
     // @ts-expect-error types don't seem to want to resolve here.
     const output = completion.choices?.[0]?.message?.content;
@@ -106,6 +120,22 @@ export async function screenCandidate(
         break;
     }
 
+    success = true;
+
+    // Track successful AI operation
+    trackAIOperation({
+      operation: 'candidate-screening',
+      model: 'llama-3.3-70b',
+      latency: duration,
+      success: true,
+    });
+
+    logger.info('Candidate screening completed', {
+      duration,
+      confidence: parsed.confidence,
+      recommendedState,
+    });
+
     return {
       confidence: parsed.confidence,
       reasoning: parsed.reasoning || 'No reasoning provided',
@@ -114,7 +144,31 @@ export async function screenCandidate(
       recommendedState,
     };
   } catch (error) {
-    console.error('Error screening candidate:', error);
+    success = false;
+    errorType = error instanceof Error ? error.name : 'UnknownError';
+
+    const latency = Date.now() - startTime;
+    const err = error instanceof Error ? error : new Error(String(error));
+
+    // Track failed AI operation
+    trackAIOperation({
+      operation: 'candidate-screening',
+      model: 'llama-3.3-70b',
+      latency,
+      success: false,
+      errorType,
+    });
+
+    logger.error('Error screening candidate', err, {
+      errorType,
+      latency,
+    });
+
+    // Emit critical failure event
+    emitAIOperationFailure('candidate-screening', err, {
+      model: 'llama-3.3-70b',
+      latency,
+    });
     
     // Fallback to manual triage on error (Requirements: 4.1 - fallback for AI failures)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

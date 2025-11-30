@@ -14,7 +14,7 @@ export function getLinearAuthorizationUrl(state?: string): string {
     client_id: config.linear.clientId,
     redirect_uri: config.linear.redirectUri,
     response_type: 'code',
-    scope: 'read,write',
+    scope: 'read,write,issues:create,comments:create,initiative:read,initiative:write',
     actor: 'app',
   });
 

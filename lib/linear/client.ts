@@ -5,7 +5,6 @@
  */
 
 import { LinearClient } from '@linear/sdk';
-import { withAuth } from '@workos-inc/authkit-nextjs';
 import { getLinearTokens, storeLinearTokens, isLinearTokenExpired } from './metadata';
 import { refreshLinearToken } from './oauth';
 import { withRetry, isRetryableError } from '../utils/retry';
@@ -15,6 +14,7 @@ import { withRetry, isRetryableError } from '../utils/retry';
  * Automatically refreshes token if expired
  */
 export async function getLinearClient(): Promise<LinearClient> {
+  const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
 
   if (!user) {
@@ -71,9 +71,12 @@ export async function getLinearClient(): Promise<LinearClient> {
  * Get Linear client with specific access token (for testing or admin operations)
  */
 export function createLinearClient(accessToken: string): LinearClient {
-  return new LinearClient({
+  console.log('[createLinearClient] Creating client with token');
+  const client = new LinearClient({
     accessToken,
   });
+  console.log('[createLinearClient] Client created');
+  return client;
 }
 
 /**
@@ -81,6 +84,7 @@ export function createLinearClient(accessToken: string): LinearClient {
  */
 export async function hasLinearConnected(): Promise<boolean> {
   try {
+    const { withAuth } = await import('@workos-inc/authkit-nextjs');
     const { user } = await withAuth();
     if (!user) return false;
     

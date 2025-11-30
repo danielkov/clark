@@ -121,23 +121,14 @@ ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
 
   // Add a comment to mention source of this submission
   try {
-    // Try with createAsUser
     await client.createComment({
       issueId: issue.id,
       body: `*This candidate was automatically added via the ATS application form.*`,
       createAsUser: "Hiring Team (bot)",
     });
-  } catch {
-    try {
-      // If we failed, it might've been because we couldn't act as an app
-      await client.createComment({
-        issueId: issue.id,
-        body: `*This candidate was automatically added via the ATS application form.*`,
-      });
-    } catch (error) {
-      // this step is optional, but log error
-      console.log("Failed to add source comment", error);
-    }
+  } catch (error) {
+    // this step is optional, but log error
+    console.log("Failed to add source comment", error);
   }
   
   // Upload CV as a Linear attachment with retry logic

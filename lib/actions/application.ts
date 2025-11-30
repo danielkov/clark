@@ -12,6 +12,8 @@ import { ApplicationResult } from '@/types';
 import { createCandidateIssue } from '@/lib/linear/issues';
 import { parseCV } from '@/lib/linear/cv-parser';
 import { getUserFriendlyErrorMessage } from '@/lib/utils/retry';
+import { logger, generateCorrelationId } from '@/lib/datadog/logger';
+import { createSpan } from '@/lib/datadog/metrics';
 
 /**
  * Submits a job application
@@ -22,6 +24,12 @@ import { getUserFriendlyErrorMessage } from '@/lib/utils/retry';
 export async function submitApplication(
   formData: FormData
 ): Promise<ApplicationResult> {
+  const correlationId = generateCorrelationId();
+  const workflowSpan = createSpan('application_submission_workflow', {
+    'workflow.name': 'application_submission',
+    'correlation_id': correlationId,
+  });
+
   try {
     // Extract form data
     const name = formData.get('name') as string;
@@ -30,6 +38,10 @@ export async function submitApplication(
     const linearOrg = formData.get('linearOrg') as string;
     const cvFile = formData.get('cv') as File | null;
     const coverLetterFile = formData.get('coverLetter') as File | null;
+
+    workflowSpan.setTag('job_id', jobId);
+    workflowSpan.setTag('linear_org', linearOrg);
+    workflowSpan.setTag('applicant_email', email);
 
     // Validate application data
     const validationErrors = validateApplication({
@@ -77,7 +89,10 @@ export async function submitApplication(
       } catch (error) {
         // Log parsing error but continue with Issue creation
         // Requirements: Handle parsing errors gracefully
-        console.error('CV parsing failed:', error);
+        logger.error('CV parsing failed', error instanceof Error ? error : new Error(String(error)), {
+          fileName: cvFile.name,
+          fileSize: cvFile.size,
+        });
         parsedCVText = undefined;
       }
     }
@@ -96,13 +111,23 @@ export async function submitApplication(
       parsedCVText
     );
     
+    workflowSpan.setTag('issue_id', issue.id);
+    workflowSpan.finish();
+    
     return {
       success: true,
       issueId: issue.id,
     };
 
   } catch (error) {
-    console.error('Application submission error:', error);
+    workflowSpan.setError(error instanceof Error ? error : new Error(String(error)));
+    workflowSpan.finish();
+    
+    logger.error('Application submission error', error instanceof Error ? error : new Error(String(error)), {
+      jobId: formData.get('jobId') as string,
+      linearOrg: formData.get('linearOrg') as string,
+      correlationId,
+    });
     
     // Provide user-friendly error message
     const errorMessage = getUserFriendlyErrorMessage(error);

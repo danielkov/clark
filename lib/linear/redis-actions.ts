@@ -4,13 +4,43 @@
 
 "use server";
 
-import { withAuth } from '@workos-inc/authkit-nextjs';
 import { getLinearClient } from './client';
 import { getLinearTokens, getATSContainerInitiativeId } from './metadata';
-import { storeOrgConfig } from '../redis';
+import { storeOrgConfig, getOrgConfig } from '../redis';
+
+/**
+ * Check if Redis config exists and is valid (not expired)
+ */
+export async function checkRedisConfigStatus(orgName: string) {
+  try {
+    const config = await getOrgConfig(orgName);
+    
+    if (!config) {
+      return {
+        hasConfig: false,
+        isExpired: false,
+      };
+    }
+
+    // Check if token is expired (with 5 minute buffer)
+    const isExpired = config.expiresAt < Date.now() + 5 * 60 * 1000;
+
+    return {
+      hasConfig: true,
+      isExpired,
+    };
+  } catch (error) {
+    console.error('Failed to check Redis config status:', error);
+    return {
+      hasConfig: false,
+      isExpired: false,
+    };
+  }
+}
 
 export async function saveOrgConfigToRedis() {
   try {
+    const { withAuth } = await import('@workos-inc/authkit-nextjs');
     const { user } = await withAuth();
     
     if (!user) {

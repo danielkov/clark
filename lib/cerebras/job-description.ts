@@ -1,6 +1,9 @@
 'use server';
 
 import { cerebras } from "./client";
+import { trackAIOperation, measureDuration } from "@/lib/datadog/metrics";
+import { logger } from "@/lib/datadog/logger";
+import { emitAIOperationFailure } from "@/lib/datadog/events";
 
 const systemPrompt = `You are an expert HR copywriter and job-description specialist. Your task is to transform a rough job description into a clear, comprehensive, and professional job posting.
 
@@ -33,24 +36,35 @@ Return the final answer in clean, well-structured Markdown, formatted as a profe
 Ensure the structure is clear, readable, and polished, using appropriate Markdown headings and bullet lists.`
 
 export async function enhanceJobDescription(original: string, toneOfVoice: string): Promise<string | undefined> {
+    const startTime = Date.now();
+    let success = false;
+    let errorType: string | undefined;
+
     try {
-        const completion = await cerebras.chat.completions.create({
-            messages: [
-                {
-                    role: "system",
-                    content: systemPrompt,
-                },
-                {
-                    role: "user",
-                    content: `Rough job description: ${original} --- Tone of Voice guide: ${toneOfVoice}`,
-                },
-            ],
-            model: "llama-3.3-70b",
-            max_completion_tokens: 1024,
-            temperature: 0.2,
-            top_p: 1,
-            stream: false,
+        logger.info('Starting job description enhancement', {
+            originalLength: original.length,
+            toneOfVoiceLength: toneOfVoice.length,
         });
+
+        const { result: completion, duration } = await measureDuration(() =>
+            cerebras.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content: systemPrompt,
+                    },
+                    {
+                        role: "user",
+                        content: `Rough job description: ${original} --- Tone of Voice guide: ${toneOfVoice}`,
+                    },
+                ],
+                model: "llama-3.3-70b",
+                max_completion_tokens: 1024,
+                temperature: 0.2,
+                top_p: 1,
+                stream: false,
+            })
+        );
 
         // @ts-expect-error types don't seemt to want to resolve here.
         const output = completion.choices?.[0]?.message?.content;
@@ -59,9 +73,49 @@ export async function enhanceJobDescription(original: string, toneOfVoice: strin
             throw new Error('No content generated from LLM');
         }
 
+        success = true;
+
+        // Track AI operation metrics
+        trackAIOperation({
+            operation: 'job-description',
+            model: 'llama-3.3-70b',
+            latency: duration,
+            success: true,
+        });
+
+        logger.info('Job description enhancement completed', {
+            duration,
+            outputLength: output.length,
+        });
+
         return output;
     } catch (error) {
-        console.error('Error enhancing job description:', error);
+        success = false;
+        errorType = error instanceof Error ? error.name : 'UnknownError';
+
+        const latency = Date.now() - startTime;
+        const err = error instanceof Error ? error : new Error(String(error));
+
+        // Track failed AI operation
+        trackAIOperation({
+            operation: 'job-description',
+            model: 'llama-3.3-70b',
+            latency,
+            success: false,
+            errorType,
+        });
+
+        logger.error('Error enhancing job description', err, {
+            errorType,
+            latency,
+        });
+
+        // Emit critical failure event
+        emitAIOperationFailure('job-description', err, {
+            model: 'llama-3.3-70b',
+            latency,
+        });
+
         throw error;
     }
 }

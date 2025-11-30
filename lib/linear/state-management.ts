@@ -251,6 +251,7 @@ export async function addIssueComment(
       () => client.createComment({
         issueId,
         body: commentBody,
+        createAsUser: "Hiring Team (bot)",
       }),
       {
         maxAttempts: 3,

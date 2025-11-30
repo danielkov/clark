@@ -19,13 +19,17 @@ interface JobBoardPageProps {
 export default async function JobBoardPage({ params }: JobBoardPageProps) {
   const { linearOrg } = await params;
   
+  console.log('[JobBoardPage] Starting, linearOrg:', linearOrg);
+  
   let jobs: JobListing[] = [];
   let error: string | null = null;
 
   try {
+    console.log('[JobBoardPage] About to call getPublishedJobsByOrg');
     jobs = await getPublishedJobsByOrg(linearOrg);
+    console.log('[JobBoardPage] getPublishedJobsByOrg returned', jobs.length, 'jobs');
   } catch (err) {
-    console.error('Failed to fetch jobs:', err);
+    console.error('[JobBoardPage] Failed to fetch jobs:', err);
     error = 'Failed to load job listings. Please try again later.';
   }
 

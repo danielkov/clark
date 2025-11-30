@@ -7,7 +7,6 @@
 import { getLinearClient } from './client';
 import { Initiative } from '@linear/sdk';
 import { storeATSContainerInitiativeId, getATSContainerInitiativeId } from './metadata';
-import { withAuth } from '@workos-inc/authkit-nextjs';
 
 /**
  * Fetch all Initiatives from user's Linear workspace
@@ -43,6 +42,7 @@ export async function createInitiative(name: string, description?: string): Prom
  * Stores the Initiative ID in WorkOS user metadata
  */
 export async function setATSContainer(initiativeId: string): Promise<void> {
+  const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
   
   if (!user) {
@@ -65,6 +65,7 @@ export async function setATSContainer(initiativeId: string): Promise<void> {
  * Get the current ATS Container Initiative ID
  */
 export async function getATSContainer(): Promise<string | null> {
+  const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
   
   if (!user) {

@@ -13,6 +13,9 @@ import { getToneOfVoiceContent } from '@/lib/linear/documents';
 import { enhanceJobDescription } from '@/lib/cerebras/job-description';
 import { triggerPreScreening } from '@/lib/linear/pre-screening';
 import { withRetry, isRetryableError } from '@/lib/utils/retry';
+import { trackWebhookProcessing, createSpan } from '@/lib/datadog/metrics';
+import { logger, generateCorrelationId } from '@/lib/datadog/logger';
+import { emitSecurityEvent, emitWebhookFailure } from '@/lib/datadog/events';
 
 /**
  * Verify webhook signature using HMAC
@@ -52,13 +55,22 @@ async function handleProjectChange(event: any): Promise<void> {
   const projectId = event.data?.id;
   
   if (!projectId) {
-    console.error('Missing project ID in webhook event');
+    logger.error('Missing project ID in webhook event');
     return;
   }
 
-  console.log('Project changed:', {
+  const correlationId = generateCorrelationId();
+  const workflowSpan = createSpan('job_publication_workflow', {
+    'workflow.name': 'job_publication',
+    'project_id': projectId,
+    'action': event.action,
+    'correlation_id': correlationId,
+  });
+
+  logger.info('Project changed', {
     projectId,
     action: event.action,
+    correlationId,
   });
 
   try {
@@ -67,7 +79,7 @@ async function handleProjectChange(event: any): Promise<void> {
     const orgUrlKey = event.url?.split('/')[3];
     
     if (!orgUrlKey) {
-      console.error('Could not extract organization URL key from webhook event');
+      logger.error('Could not extract organization URL key from webhook event');
       return;
     }
 
@@ -75,7 +87,7 @@ async function handleProjectChange(event: any): Promise<void> {
     const orgConfig = await getOrgConfig(orgUrlKey);
     
     if (!orgConfig) {
-      console.error('Organization config not found in Redis:', orgUrlKey);
+      logger.error('Organization config not found in Redis', undefined, { orgUrlKey });
       return;
     }
 
@@ -86,7 +98,7 @@ async function handleProjectChange(event: any): Promise<void> {
     const project = await client.project(projectId);
     
     if (!project) {
-      console.error('Project not found:', projectId);
+      logger.error('Project not found', undefined, { projectId });
       return;
     }
 
@@ -97,7 +109,7 @@ async function handleProjectChange(event: any): Promise<void> {
     );
 
     if (!initiative) {
-      console.log('Project does not belong to ATS Container Initiative, skipping enhancement');
+      logger.info('Project does not belong to ATS Container Initiative, skipping enhancement', { projectId });
       return;
     }
 
@@ -106,17 +118,17 @@ async function handleProjectChange(event: any): Promise<void> {
     const hasEnhanceLabel = labels.nodes.some(label => label.name === 'enhance');
     
     if (!hasEnhanceLabel) {
-      console.log('Project does not have "enhance" label, skipping enhancement');
+      logger.info('Project does not have "enhance" label, skipping enhancement', { projectId });
       return;
     }
 
-    console.log('Project has "enhance" label, starting enhancement process');
+    logger.info('Project has "enhance" label, starting enhancement process', { projectId });
 
     // Get the original content
     const originalContent = project.content || '';
     
     if (!originalContent) {
-      console.error('Project has no content to enhance');
+      logger.error('Project has no content to enhance', undefined, { projectId });
       return;
     }
 
@@ -124,7 +136,7 @@ async function handleProjectChange(event: any): Promise<void> {
     const toneOfVoice = await getToneOfVoiceContent(initiative.id, client);
 
     // Enhance the job description with retry logic
-    console.log('Calling AI enhancement...');
+    logger.info('Calling AI enhancement', { projectId });
     const enhancedContent = await withRetry(
       () => enhanceJobDescription(originalContent, toneOfVoice),
       {
@@ -135,11 +147,11 @@ async function handleProjectChange(event: any): Promise<void> {
     );
 
     if (!enhancedContent) {
-      console.error('AI enhancement returned no content');
+      logger.error('AI enhancement returned no content', undefined, { projectId });
       return;
     }
 
-    console.log('AI enhancement completed, preparing to update project');
+    logger.info('AI enhancement completed, preparing to update project', { projectId });
 
     // Get current label IDs (excluding 'enhance')
     const currentLabelIds = labels.nodes
@@ -170,12 +182,17 @@ async function handleProjectChange(event: any): Promise<void> {
         content: enhancedContent,
         labelIds: [...currentLabelIds, aiGeneratedLabel.id],
       });
-      console.log('Project enhancement completed successfully');
+      logger.info('Project enhancement completed successfully', { projectId, correlationId });
+      workflowSpan.finish();
     } else {
-      console.error('Failed to get or create ai-generated label');
+      logger.error('Failed to get or create ai-generated label', undefined, { projectId, correlationId });
+      workflowSpan.setError(new Error('Failed to get or create ai-generated label'));
+      workflowSpan.finish();
     }
   } catch (error) {
-    console.error('Error handling project change:', error);
+    workflowSpan.setError(error instanceof Error ? error : new Error(String(error)));
+    workflowSpan.finish();
+    logger.error('Error handling project change', error instanceof Error ? error : new Error(String(error)), { projectId, correlationId });
   }
 }
 
@@ -185,22 +202,31 @@ async function handleProjectChange(event: any): Promise<void> {
 async function handleIssueCreation(event: any): Promise<void> {
   const issueId = event.data?.id;
   
-  console.log('Issue created:', {
-    issueId,
-    projectId: event.data?.project?.id,
-  });
-  
   if (!issueId) {
-    console.error('Missing issue ID in webhook event');
+    logger.error('Missing issue ID in webhook event');
     return;
   }
+
+  const correlationId = generateCorrelationId();
+  const workflowSpan = createSpan('ai_prescreening_workflow', {
+    'workflow.name': 'ai_prescreening',
+    'issue_id': issueId,
+    'project_id': event.data?.project?.id,
+    'correlation_id': correlationId,
+  });
+  
+  logger.info('Issue created', {
+    issueId,
+    projectId: event.data?.project?.id,
+    correlationId,
+  });
   
   try {
     // Extract organization URL key from webhook event
     const orgUrlKey = event.url?.split('/')[3];
     
     if (!orgUrlKey) {
-      console.error('Could not extract organization URL key from webhook event');
+      logger.error('Could not extract organization URL key from webhook event');
       return;
     }
     
@@ -208,7 +234,7 @@ async function handleIssueCreation(event: any): Promise<void> {
     const orgConfig = await getOrgConfig(orgUrlKey);
     
     if (!orgConfig) {
-      console.error('Organization config not found in Redis:', orgUrlKey);
+      logger.error('Organization config not found in Redis', undefined, { orgUrlKey });
       return;
     }
     
@@ -220,17 +246,24 @@ async function handleIssueCreation(event: any): Promise<void> {
     );
     
     if (screeningResult) {
-      console.log('Pre-screening completed successfully:', {
+      workflowSpan.setTag('confidence', screeningResult.confidence);
+      workflowSpan.setTag('recommended_state', screeningResult.recommendedState);
+      logger.info('Pre-screening completed successfully', {
         issueId,
         confidence: screeningResult.confidence,
         recommendedState: screeningResult.recommendedState,
+        correlationId,
       });
+      workflowSpan.finish();
     } else {
-      console.log('Pre-screening was not triggered for Issue:', issueId);
+      logger.info('Pre-screening was not triggered for Issue', { issueId, correlationId });
+      workflowSpan.finish();
     }
   } catch (error) {
     // Handle errors gracefully - log and continue
-    console.error('Error during Issue creation handling:', error);
+    workflowSpan.setError(error instanceof Error ? error : new Error(String(error)));
+    workflowSpan.finish();
+    logger.error('Error during Issue creation handling', error instanceof Error ? error : new Error(String(error)), { issueId, correlationId });
     // Don't throw - we want the webhook to succeed even if pre-screening fails
   }
 }
@@ -256,7 +289,7 @@ async function routeWebhookEvent(event: any): Promise<void> {
       break;
       
     default:
-      console.log('Unhandled webhook event type:', eventType);
+      logger.info('Unhandled webhook event type', { eventType });
   }
 }
 
@@ -266,6 +299,11 @@ async function routeWebhookEvent(event: any): Promise<void> {
  * Receives and processes Linear webhook events
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+  let eventType = 'unknown';
+  let success = false;
+  let errorType: string | undefined;
+
   try {
     // Get the raw body for signature verification
     const body = await request.text();
@@ -274,7 +312,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const signature = request.headers.get('linear-signature');
     
     if (!signature) {
-      console.error('Missing webhook signature or timestamp');
+      logger.error('Missing webhook signature or timestamp');
+      errorType = 'MissingSignature';
+      
+      emitSecurityEvent(
+        'Webhook Missing Signature',
+        'Received webhook request without signature',
+        { errorType }
+      );
+      
+      trackWebhookProcessing({
+        eventType: 'unknown',
+        duration: Date.now() - startTime,
+        success: false,
+        errorType,
+      });
+      
       return NextResponse.json(
         { error: 'Missing signature or timestamp' },
         { status: 401 }
@@ -283,7 +336,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     
     // Verify webhook signature
     if (!verifyWebhookSignature(body, signature, config.linear.webhookSecret)) {
-      console.error('Invalid webhook signature');
+      logger.error('Invalid webhook signature');
+      errorType = 'InvalidSignature';
+      
+      emitSecurityEvent(
+        'Webhook Signature Verification Failed',
+        'Webhook signature verification failed - possible tampering attempt',
+        { errorType, signature }
+      );
+      
+      trackWebhookProcessing({
+        eventType: 'unknown',
+        duration: Date.now() - startTime,
+        success: false,
+        errorType,
+      });
+      
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
@@ -292,13 +360,46 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     
     // Parse the webhook payload
     const event = JSON.parse(body);
+    eventType = `${event.type}:${event.action}`;
+    
+    logger.info('Processing webhook event', { eventType });
     
     // Route to appropriate handler
     await routeWebhookEvent(event);
     
+    success = true;
+    
+    // Track successful webhook processing
+    trackWebhookProcessing({
+      eventType,
+      duration: Date.now() - startTime,
+      success: true,
+    });
+    
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Webhook processing error:', error);
+    success = false;
+    errorType = error instanceof Error ? error.name : 'UnknownError';
+    
+    const err = error instanceof Error ? error : new Error(String(error));
+    
+    logger.error('Webhook processing error', err, {
+      eventType,
+    });
+    
+    // Emit critical failure event
+    emitWebhookFailure(eventType, err, {
+      duration: Date.now() - startTime,
+    });
+    
+    // Track failed webhook processing
+    trackWebhookProcessing({
+      eventType,
+      duration: Date.now() - startTime,
+      success: false,
+      errorType,
+    });
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

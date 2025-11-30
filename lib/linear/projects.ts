@@ -7,7 +7,6 @@
 import { createLinearClient, getLinearClient } from './client';
 import { Project } from '@linear/sdk';
 import { getATSContainerInitiativeId } from './metadata';
-import { withAuth } from '@workos-inc/authkit-nextjs';
 import { JobListing } from '@/types';
 import { getOrgConfig } from '../redis';
 import { remark } from 'remark';
@@ -17,6 +16,7 @@ import html from 'remark-html';
  * Fetch all Projects from the ATS Container Initiative
  */
 export async function syncProjects(): Promise<Project[]> {
+  const { withAuth } = await import('@workos-inc/authkit-nextjs');
   const { user } = await withAuth();
   
   if (!user) {
@@ -153,10 +153,37 @@ export async function getJobListingById(projectId: string): Promise<JobListing |
 export async function getJobListingByIdForOrg(linearOrg: string, projectId: string): Promise<JobListing | null> {
   
   // Get the org config from Redis
-  const config = await getOrgConfig(linearOrg);
+  let config = await getOrgConfig(linearOrg);
   
   if (!config) {
     throw new Error('Organization configuration not found. Please sync your configuration to Redis first.');
+  }
+  
+  // Check if token is expired and refresh if needed
+  const isExpired = Date.now() >= config.expiresAt;
+  
+  if (isExpired) {
+    const { refreshLinearToken } = await import('./oauth');
+    const { storeOrgConfig } = await import('../redis');
+    
+    try {
+      const { accessToken, refreshToken, expiresIn } = await refreshLinearToken(config.refreshToken);
+      const expiresAt = Date.now() + expiresIn * 1000;
+      
+      // Update config with new tokens
+      config = {
+        ...config,
+        accessToken,
+        refreshToken,
+        expiresAt,
+      };
+      
+      // Store updated config back to Redis
+      await storeOrgConfig(linearOrg, config);
+    } catch (error) {
+      console.error('Failed to refresh token:', error);
+      throw new Error('Linear authentication has expired or been revoked. Please sign in to the dashboard, disconnect and reconnect Linear, then sync the configuration to Redis again.');
+    }
   }
   
   // Create Linear client with org token
@@ -220,16 +247,51 @@ export async function getJobListingByIdForOrg(linearOrg: string, projectId: stri
  * This is used for the public job board and uses the org config from Redis
  */
 export async function getPublishedJobsByOrg(linearOrg: string): Promise<JobListing[]> {
+  console.log('[getPublishedJobsByOrg] Starting for org:', linearOrg);
   
   // Get the org config from Redis
-  const config = await getOrgConfig(linearOrg);
+  console.log('[getPublishedJobsByOrg] About to call getOrgConfig');
+  let config = await getOrgConfig(linearOrg);
+  console.log('[getPublishedJobsByOrg] getOrgConfig returned:', config ? 'config found' : 'null');
   
   if (!config) {
     throw new Error('Organization configuration not found. Please sync your configuration to Redis first.');
   }
   
+  // Check if token is expired and refresh if needed
+  const isExpired = Date.now() >= config.expiresAt;
+  console.log('[getPublishedJobsByOrg] Token expired?', isExpired, 'expiresAt:', new Date(config.expiresAt));
+  
+  if (isExpired) {
+    console.log('[getPublishedJobsByOrg] Token expired, refreshing...');
+    const { refreshLinearToken } = await import('./oauth');
+    const { storeOrgConfig } = await import('../redis');
+    
+    try {
+      const { accessToken, refreshToken, expiresIn } = await refreshLinearToken(config.refreshToken);
+      const expiresAt = Date.now() + expiresIn * 1000;
+      
+      // Update config with new tokens
+      config = {
+        ...config,
+        accessToken,
+        refreshToken,
+        expiresAt,
+      };
+      
+      // Store updated config back to Redis
+      await storeOrgConfig(linearOrg, config);
+      console.log('[getPublishedJobsByOrg] Token refreshed successfully');
+    } catch (error) {
+      console.error('[getPublishedJobsByOrg] Failed to refresh token:', error);
+      throw new Error('Linear authentication has expired or been revoked. Please sign in to the dashboard, disconnect and reconnect Linear, then sync the configuration to Redis again.');
+    }
+  }
+  
   // Create Linear client with org token
+  console.log('[getPublishedJobsByOrg] About to call createLinearClient');
   const client = createLinearClient(config.accessToken);
+  console.log('[getPublishedJobsByOrg] createLinearClient returned');
   
   // Fetch the organization
   const organization = await client.organization;

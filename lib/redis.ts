@@ -37,8 +37,11 @@ export async function storeOrgConfig(orgName: string, config: LinearOrgConfig): 
  * Get Linear organization configuration from Redis
  */
 export async function getOrgConfig(orgName: string): Promise<LinearOrgConfig | null> {
+  console.log('[getOrgConfig] Starting for org:', orgName);
   const key = `linear:org:${orgName}:config`;
+  console.log('[getOrgConfig] About to call redis.get with key:', key);
   const res = await redis.get<LinearOrgConfig>(key)
+  console.log('[getOrgConfig] redis.get returned:', res ? 'config found' : 'null');
   return res;
 }
 

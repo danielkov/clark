@@ -322,8 +322,8 @@
     - Test error message formatting
     - _Requirements: All_
 
-- [ ] 14. Implement Datadog observability
-  - [ ] 14.1 Set up Datadog integration
+- [x] 14. Implement Datadog observability
+  - [x] 14.1 Set up Datadog integration
     - Install dd-trace and datadog-api-client packages
     - Create lib/datadog/client.ts with Datadog initialization
     - Implement initializeDatadog function with service name, environment, and version tags
@@ -332,7 +332,7 @@
     - Set up environment variables for Datadog API key and configuration
     - _Requirements: 6.5_
   
-  - [ ] 14.2 Implement structured logging with Datadog
+  - [x] 14.2 Implement structured logging with Datadog
     - Create lib/datadog/logger.ts with structured logging utilities
     - Implement logger with correlation ID support
     - Add log methods: info, error, warn, debug with Datadog integration
@@ -340,34 +340,34 @@
     - Integrate logger throughout codebase replacing console.log statements
     - _Requirements: 6.2_
   
-  - [ ] 14.3 Add API request metrics tracking
+  - [x] 14.3 Add API request metrics tracking
     - Create lib/datadog/metrics.ts for metrics utilities
     - Implement trackAPIRequest function to record duration, status code, and endpoint
     - Create Datadog middleware for automatic API request tracking
     - Add middleware to NextJS middleware.ts for all API routes
     - _Requirements: 6.1_
   
-  - [ ] 14.4 Implement AI operation metrics
+  - [x] 14.4 Implement AI operation metrics
     - Create trackAIOperation function in lib/datadog/metrics.ts
     - Add metrics tracking to lib/cerebras/job-description.ts for job description generation
     - Add metrics tracking to lib/cerebras/candidate-screening.ts for candidate screening
     - Track LLM latency, token usage, and operation success/failure rate
     - _Requirements: 6.3_
   
-  - [ ] 14.5 Add webhook processing metrics
+  - [x] 14.5 Add webhook processing metrics
     - Create trackWebhookProcessing function in lib/datadog/metrics.ts
     - Add metrics tracking to app/api/webhooks/linear/route.ts
     - Track event type, processing duration, and outcome for all webhook events
     - _Requirements: 6.4_
   
-  - [ ] 14.6 Implement error logging with full context
+  - [x] 14.6 Implement error logging with full context
     - Update error handling throughout codebase to use Datadog logger
     - Ensure all errors include stack trace, correlation ID, and relevant metadata
     - Add error logging to lib/utils/retry.ts for retry failures
     - Add error logging to all API routes and server actions
     - _Requirements: 6.2_
   
-  - [ ] 14.7 Add critical failure event emission
+  - [x] 14.7 Add critical failure event emission
     - Create lib/datadog/events.ts for Datadog event utilities
     - Implement emitDatadogEvent function for custom events
     - Implement emitCriticalFailure function for high-priority alerts
@@ -375,7 +375,7 @@
     - Add critical failure events to AI operation failures, webhook processing failures, and authentication failures
     - _Requirements: 6.6_
   
-  - [ ] 14.8 Create distributed tracing for key workflows
+  - [x] 14.8 Create distributed tracing for key workflows
     - Add custom span creation for onboarding workflow
     - Add custom span creation for job publication workflow
     - Add custom span creation for application submission workflow
@@ -383,7 +383,7 @@
     - Ensure correlation IDs propagate across all service calls
     - _Requirements: 6.5_
   
-  - [ ] 14.9 Add health check endpoint
+  - [x] 14.9 Add health check endpoint
     - Create app/api/health/route.ts for health check endpoint
     - Implement basic health check returning service status
     - Add checks for critical dependencies (Linear API, Cerebras API, database)
