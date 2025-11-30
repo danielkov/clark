@@ -173,8 +173,8 @@
     - Test error message display
     - _Requirements: 3.1, 3.2_
 
-- [ ] 8. Implement candidate Issue creation with CV parsing
-  - [ ] 8.1 Create CV parsing module
+- [x] 8. Implement candidate Issue creation with CV parsing
+  - [x] 8.1 Create CV parsing module
     - Create lib/linear/cv-parser.ts file
     - Create parseCV function that accepts file buffer and file type
     - Implement PDF parsing using pdf-parse library
@@ -184,7 +184,7 @@
     - Return extracted text content as string
     - _Requirements: 5.2_
   
-  - [ ] 8.2 Update Linear Issue creation workflow
+  - [x] 8.2 Update Linear Issue creation workflow
     - Update createCandidateIssue function in lib/linear/issues.ts to accept parsed CV text parameter
     - Append parsed CV text to Issue description after a line break
     - Keep existing CV upload as Linear attachment (already implemented)
@@ -192,7 +192,7 @@
     - Issue state "Triage" assignment already implemented
     - _Requirements: 3.3, 3.4, 3.5, 3.6, 5.3, 5.4_
   
-  - [ ] 8.3 Update application submission flow
+  - [x] 8.3 Update application submission flow
     - Update submitApplication in lib/actions/application.ts
     - Parse CV file using parseCV before creating Issue
     - Pass parsed CV text to createCandidateIssue

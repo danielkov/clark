@@ -10,6 +10,7 @@
 import { validateApplication, validateFile } from '@/lib/validation';
 import { ApplicationResult } from '@/types';
 import { createCandidateIssue } from '@/lib/linear/issues';
+import { parseCV } from '@/lib/linear/cv-parser';
 
 /**
  * Submits a job application
@@ -66,8 +67,22 @@ export async function submitApplication(
       };
     }
 
+    // Parse CV file to extract text content (Requirements: 5.2, 5.3)
+    let parsedCVText: string | undefined;
+    if (cvFile) {
+      try {
+        const cvBuffer = Buffer.from(await cvFile.arrayBuffer());
+        parsedCVText = await parseCV(cvBuffer, cvFile.name);
+      } catch (error) {
+        // Log parsing error but continue with Issue creation
+        // Requirements: Handle parsing errors gracefully
+        console.error('CV parsing failed:', error);
+        parsedCVText = undefined;
+      }
+    }
+
     // Create Linear Issue for the candidate
-    // Requirements: 3.3, 3.4, 3.5, 3.6
+    // Requirements: 3.3, 3.4, 3.5, 3.6, 5.3
     const issue = await createCandidateIssue(
       linearOrg,
       jobId,
@@ -76,7 +91,8 @@ export async function submitApplication(
         email,
         cvFile: cvFile!,
         coverLetterFile,
-      }
+      },
+      parsedCVText
     );
     
     return {

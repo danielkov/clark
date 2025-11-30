@@ -15,6 +15,7 @@ import { getOrgConfig } from '../redis';
  * @param linearOrg Linear organization name
  * @param projectId Linear Project ID (job listing)
  * @param candidateData Candidate application data
+ * @param parsedCVText Optional parsed CV text content to append to Issue description
  * @returns Created Issue
  */
 export async function createCandidateIssue(
@@ -25,7 +26,8 @@ export async function createCandidateIssue(
     email: string;
     cvFile: File;
     coverLetterFile?: File | null;
-  }
+  },
+  parsedCVText?: string
 ): Promise<Issue> {
   // Get the org config from Redis
   const config = await getOrgConfig(linearOrg);
@@ -71,7 +73,7 @@ export async function createCandidateIssue(
   
   // Create the Issue title and description
   const issueTitle = `${candidateData.name} - Application`;
-  const issueDescription = `
+  let issueDescription = `
 # Candidate Application
 
 **Name:** ${candidateData.name}
@@ -81,6 +83,11 @@ export async function createCandidateIssue(
 - CV: Attached
 ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
   `.trim();
+  
+  // Append parsed CV text if provided (Requirements: 5.3)
+  if (parsedCVText) {
+    issueDescription += `\n\n---\n\n## CV Content\n\n${parsedCVText}`;
+  }
   
   // Create the Issue
   const issuePayload = await client.createIssue({
