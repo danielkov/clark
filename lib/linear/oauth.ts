@@ -15,6 +15,7 @@ export function getLinearAuthorizationUrl(state?: string): string {
     redirect_uri: config.linear.redirectUri,
     response_type: 'code',
     scope: 'read,write',
+    actor: 'app',
   });
 
   if (state) {

@@ -226,6 +226,8 @@ Upon a bit of research, turns out I was wrong about Linear API access via author
 
 The approach I took here - mostly using vibe code - bit of hand-coding where I felt like the LLM struggled to comprehend: add Upstash Redis as a layer to store all of the config we initially stored on each user object. This way we can imprersonate users when we need unauthenticated access. This will helps us in the next steps when we want to actually create Linear issues from submissions.
 
+## Application form
+
 Tried out-of-order task running. All requirements were met, so this task could be completed by Kiro. Still seems to be obsessed with building API routes, even if not explicitly told so, and/or if server functions are mentioned. I'd rather not start adding "DO NOT USE API ROUTES" in the tasks, but it seems like I might need to. This time I interrupted it and asked it to use server actions and it obliged.
 
 ```
@@ -235,3 +237,34 @@ The implementation follows Next.js 14+ best practices with server actions, provi
 ...Says Kiro. Our Next.js version is 16. Seems like it's maybe not aware, or just trying to generalise?
 
 I also realised I can just ask Kiro to update tasks. I've asked it to split 9, which was arbitrarily split into 9.1 and 9.2 to instead be split based on Linear (9.1) and LiquidMetal (9.2) to allow me to work on these separately.
+
+## Submitting the form
+
+Even though this task was quite well-defined and small, compared to the previous ones, we could observe how Kiro ramped up token (sorry, credit) usage:
+
+```
+Credits used: 1.55 (?)
+Elapsed time: 1m 31s
+```
+
+On previous tasks, Kiro jumped head-first into implementation, without much thought. This time it did quite a lot of research. Most importantly, it used server actions, without me having to prompt it to in addition to the task.
+
+The form worked on the first try and it successfully added a new issue in Linear, which is fantastic! It did disregard my original ask though. I clearly asked it to upload documents as attachments to Linear. It decided to go another route and assume it could just use SmartBucket later on:
+
+```ts
+// Note: Linear SDK doesn't directly support file uploads via API
+// The document is created with metadata about the file
+// For actual file storage, we would need to use Linear's file upload endpoint
+// or integrate with SmartBuckets (which will be done in task 9.2)
+
+// For now, we store the file metadata in the document
+// Task 9.2 will implement SmartBuckets integration for actual file storage
+```
+
+I'm not sure why it refused to use Linear's file upload endpoint. I ended prompting vibe coding mode to implement this properly. Again, the refusal to use the internet for help really hurt it. It took it 8 tries to get it right. Linear uses a very simple signed URL approach for file uploads and what's cool, is that the SDK comes with the URL generator built-in, so all one has to do, is send a POST request with the information returned from the SDK call.
+
+I decided to use Cerebras for inference, since I couldn't figure out what LiquidMetal is, or what it's supposed to do. Asking ChatGPT and Gemini yields more confusion. Their docs are horribly structured, so it's no wonder LLMs can't figure them out.
+
+I knew that Kiro refusing to use the internet would seriously hurt this part, since a lot of these APIs and SDKs are only weeks old. The models won't have that "knowledge" yet, so it would just hallucinate endlessly. I hand-coded an example, that improves job descriptions. This covers all of the API surface required for the rest of the text inference features. Interested to see if Kiro's able to pick up on this.
+
+My plan also seriously diverged from what's in `tasks.md`. I decided to vibe code (because I trust this mode more vs plan mode) one end-to-end example and then prompt spec mode to update the spec, based on the existing working implementation.

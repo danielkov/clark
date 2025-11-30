@@ -165,7 +165,7 @@
     - _Requirements: 3.1, 3.2_
 
 - [ ] 9. Implement candidate Issue creation
-  - [ ] 9.1 Implement Linear Issue creation workflow
+  - [x] 9.1 Implement Linear Issue creation workflow
     - Create createCandidateIssue function using Linear SDK
     - Implement CV upload as Linear Document attachment linked to Issue
     - Implement cover letter upload as Linear Document attachment (conditional)

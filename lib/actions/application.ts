@@ -4,11 +4,12 @@
  * Server Actions for Application Submission
  * 
  * Handles job application submissions with validation
- * Requirements: 3.1, 3.2
+ * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
 
 import { validateApplication, validateFile } from '@/lib/validation';
 import { ApplicationResult } from '@/types';
+import { createCandidateIssue } from '@/lib/linear/issues';
 
 /**
  * Submits a job application
@@ -65,17 +66,22 @@ export async function submitApplication(
       };
     }
 
-    // TODO: Task 9 will implement:
-    // - Upload CV to SmartBuckets
-    // - Create Linear Issue
-    // - Attach documents to Issue
-    // - Set Issue state to "Triage"
+    // Create Linear Issue for the candidate
+    // Requirements: 3.3, 3.4, 3.5, 3.6
+    const issue = await createCandidateIssue(
+      linearOrg,
+      jobId,
+      {
+        name,
+        email,
+        cvFile: cvFile!,
+        coverLetterFile,
+      }
+    );
     
-    // For now, return success response
-    // This will be replaced with actual implementation in task 9
     return {
       success: true,
-      // issueId will be added in task 9
+      issueId: issue.id,
     };
 
   } catch (error) {
