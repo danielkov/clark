@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI-enriched ATS is a NextJS full-stack application that uses Linear as its source of truth for all recruitment data. The system architecture follows a hybrid state model where Linear maintains authoritative data while the NextJS application provides the user interface, public job board, and AI orchestration layer. WorkOS handles authentication, and LiquidMetal provides AI capabilities through SmartBuckets (document storage with vector embeddings) and SmartInference (LLM operations).
+The AI-enriched ATS is a NextJS full-stack application that uses Linear as its source of truth for all recruitment data. The system architecture follows a hybrid state model where Linear maintains authoritative data while the NextJS application provides the user interface, public job board, and AI orchestration layer. WorkOS handles authentication, and Cerebras provides fast AI inference capabilities for LLM operations.
 
 The core design principle is to treat Linear as the single source of truth, with the NextJS application acting as a view layer and orchestration engine. All state changes flow through Linear's API, and the application subscribes to Linear webhooks to maintain synchronization.
 
@@ -28,9 +28,9 @@ The core design principle is to treat Linear as the single source of truth, with
    - Documents: CVs, Cover Letters, Tone of Voice guides
    - Webhooks: Real-time synchronization
 
-4. **AI Layer (LiquidMetal)**
-   - SmartBuckets: Document storage with automatic vector embeddings
-   - SmartInference: LLM operations for job description generation and candidate screening
+4. **AI Layer (Cerebras)**
+   - Fast LLM inference for job description generation and candidate screening
+   - Uses llama-3.3-70b model for high-quality text generation
 
 ### Data Flow Patterns
 
@@ -42,22 +42,22 @@ User → WorkOS Login → NextJS Callback → Linear OAuth → Store Session →
 **Pattern 2: Job Listing Publication Flow**
 ```
 Linear Project Status Change → Webhook → NextJS API → Check ai-generated Label → 
-(If missing) → SmartInference (Generate Description) → Update Linear Project → 
+(If missing) → Cerebras API (Generate Description) → Update Linear Project → 
 Update Public Job Board Cache
 ```
 
 **Pattern 3: Candidate Application Flow**
 ```
 Website Form → NextJS API → Validate Input → 
-Upload CV to SmartBuckets → Create Linear Issue → 
-Trigger AI Pre-screening → Update Issue State → Add Comment
+Parse CV (pdf-parse/mammoth) → Create Linear Issue with CV text in description → 
+Upload CV as Document Attachment → Trigger AI Pre-screening → Update Issue State → Add Comment
 ```
 
 **Pattern 4: AI Pre-screening Flow**
 ```
 New Issue Created → Webhook → NextJS API → 
-Retrieve CV from SmartBuckets → Retrieve Job Description → 
-SmartInference (Compare & Score) → Update Issue State → Add Reasoning Comment
+Read Issue Description (contains CV text) → Retrieve Job Description → 
+Cerebras API (Compare & Score) → Update Issue State → Add Reasoning Comment
 ```
 
 ## Components and Interfaces
@@ -119,23 +119,27 @@ SmartInference (Compare & Score) → Update Issue State → Add Reasoning Commen
 
 ### 4. AI Services Module
 
-**LiquidMetal SmartBuckets Integration**
-- `uploadToSmartBuckets()`: Streams file to SmartBuckets and returns reference
-- `retrieveFromSmartBuckets()`: Fetches document content by reference
-- `searchSmartBuckets()`: Performs vector similarity search
-- Automatic embedding generation on upload
+**Document Parsing Module**
+- `parseCV()`: Extracts text content from uploaded CV files
+  - Uses pdf-parse for PDF files
+  - Uses mammoth for DOC/DOCX files
+  - Uses file-type to detect file format
+  - Returns extracted text content
 
-**LiquidMetal SmartInference Integration**
-- `generateJobDescription()`: Invokes LLM to create job description
+**Cerebras Integration**
+- `cerebras`: Initialized Cerebras client with API key
+- `enhanceJobDescription()`: Invokes Cerebras LLM to create job description
   - Inputs: Project description, Tone of Voice Document
-  - Output: Structured job description with sections
-- `screenCandidate()`: Invokes LLM to evaluate candidate fit
-  - Inputs: CV content, Job Description
+  - Model: llama-3.3-70b
+  - Output: Structured job description in Markdown format
+- `screenCandidate()`: Invokes Cerebras LLM to evaluate candidate fit
+  - Inputs: Issue description (includes CV content), Job Description
+  - Model: llama-3.3-70b
   - Output: Match confidence (High/Low/Ambiguous) and reasoning
 
 **AI Pre-screening Agent**
 - `triggerPreScreening()`: Initiates screening workflow for new candidate
-- `evaluateCandidateFit()`: Compares CV against job requirements
+- `evaluateCandidateFit()`: Compares Issue content (with CV) against job requirements using Cerebras
 - `determineIssueState()`: Maps AI confidence to Linear workflow state
 - `generateReasoningComment()`: Creates human-readable explanation
 
@@ -257,20 +261,24 @@ interface ScreeningResult {
 *For any* Issue state transition performed by the AI Pre-screening Agent, the system should add a comment to the Issue containing the AI's reasoning and specific evidence.
 **Validates: Requirements 4.6**
 
-### Property 17: SmartBuckets storage for AI documents
-*For any* document (Tone of Voice or CV) that needs AI processing, the system should store it in SmartBuckets with automatic vector embedding generation.
-**Validates: Requirements 5.1, 5.3**
+### Property 17: Cerebras for LLM operations
+*For any* LLM operation (job description generation or candidate screening), the system should use Cerebras API to execute the operation.
+**Validates: Requirements 5.1**
 
-### Property 18: SmartInference for LLM operations
-*For any* LLM operation (job description generation or candidate screening), the system should use LiquidMetal SmartInference to execute the operation.
+### Property 18: CV parsing on upload
+*For any* uploaded CV file, the system should parse the content using pdf-parse for PDFs and mammoth for DOC/DOCX files.
 **Validates: Requirements 5.2**
 
-### Property 19: Dual storage for applicant files
-*For any* CV file uploaded by an applicant, the system should store it in SmartBuckets for AI processing and store the reference URL in the Linear Issue for human access.
+### Property 19: CV content in Issue description
+*For any* candidate Issue created, the Issue description should contain the parsed CV text content appended after a line break.
+**Validates: Requirements 5.3**
+
+### Property 20: Linear Document attachment for human access
+*For any* CV file uploaded by an applicant, the system should store it as a Linear Document attachment for human recruiter access.
 **Validates: Requirements 5.4**
 
-### Property 20: Vector search for semantic operations
-*For any* semantic search or retrieval operation during screening, the system should query SmartBuckets using vector similarity search.
+### Property 21: Consistent model configuration for job descriptions
+*For any* job description generation request, the system should use the Cerebras llama-3.3-70b model with temperature 0.2 for consistent output quality.
 **Validates: Requirements 5.5**
 
 ## Error Handling
@@ -291,13 +299,13 @@ interface ScreeningResult {
 ### File Upload Errors
 - **File Too Large**: Validate size client-side (max 10MB) and server-side, display error
 - **Invalid File Type**: Accept only PDF, DOC, DOCX for CVs, display error for others
-- **SmartBuckets Upload Failure**: Retry upload (max 3 attempts), fallback to temporary storage
+- **CV Parsing Failure**: Log error with file details, create Issue without CV text, notify user
+- **Linear Document Upload Failure**: Retry upload (max 3 attempts), display error to user
 - **Virus Detection**: Reject file and notify user if malware detected
 
 ### AI Service Errors
-- **SmartInference Timeout**: Set 30-second timeout, fallback to manual triage
+- **Cerebras API Timeout**: Set 30-second timeout, fallback to manual triage
 - **LLM Generation Failure**: Log error, leave Project without ai-generated label for retry
-- **Embedding Generation Failure**: Retry (max 3 attempts), fallback to keyword search
 - **Low Confidence Score**: Default to "Triage" state for human review
 
 ### Data Validation Errors
@@ -335,8 +343,8 @@ Unit tests will verify specific examples, edge cases, and integration points:
 - Test file upload handling with various file types and sizes
 
 **AI Services**
-- Test SmartBuckets integration with mock responses
-- Test SmartInference integration with mock LLM outputs
+- Test Cerebras integration with mock responses
+- Test job description enhancement with mock LLM outputs
 - Test AI Pre-screening logic with predefined confidence scores
 
 ### Property-Based Testing Approach
@@ -443,16 +451,18 @@ Integration tests will verify end-to-end workflows:
 - Implement cache warming for frequently accessed jobs
 
 ### File Upload Optimization
-- Stream large files directly to SmartBuckets without buffering in NextJS
+- Parse CV content immediately on upload before creating Issue
+- Upload files directly to Linear Documents API
 - Implement client-side file compression before upload
 - Use multipart upload for files larger than 5MB
-- Generate presigned URLs for direct browser-to-SmartBuckets uploads
+- Validate file types and sizes before upload
 
 ### AI Operation Optimization
 - Batch multiple screening operations when possible
 - Implement queue system for AI operations to prevent overload
-- Cache embedding results for frequently accessed documents
 - Use async processing for non-blocking AI operations
+- Leverage Cerebras' fast inference speeds for real-time responses
+- Read CV content directly from Issue description (no additional API calls needed)
 
 ### Database Optimization
 - Index Linear IDs for fast lookups

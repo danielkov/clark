@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document specifies the requirements for an AI-enriched Applicant Tracking System (ATS) that integrates with Linear as its source of truth. The system uses NextJS as a full-stack framework, WorkOS for authentication, and LiquidMetal (Raindrop Platform) for AI capabilities. The ATS maps Linear's organizational structure to recruitment workflows: Initiatives represent hiring containers, Projects represent job openings, Issues represent candidates, and Documents store tone of voice guides and applicant materials.
+This document specifies the requirements for an AI-enriched Applicant Tracking System (ATS) that integrates with Linear as its source of truth. The system uses NextJS as a full-stack framework, WorkOS for authentication, and Cerebras for AI inference capabilities. The ATS maps Linear's organizational structure to recruitment workflows: Initiatives represent hiring containers, Projects represent job openings, Issues represent candidates, and Documents store tone of voice guides and applicant materials.
 
 ## Glossary
 
@@ -15,9 +15,7 @@ This document specifies the requirements for an AI-enriched Applicant Tracking S
 - **Linear Document**: A Linear entity for storing text content such as tone of voice guides, CVs, and cover letters
 - **ATS Container**: The designated Linear Initiative that holds all recruitment-related Projects
 - **Job Listing**: A publicly visible job posting on the website derived from a Linear Project
-- **LiquidMetal**: AI platform (Raindrop Platform) providing SmartBuckets, SmartInference, and other AI services
-- **SmartBuckets**: LiquidMetal service for storing and indexing documents with automatic vector embeddings
-- **SmartInference**: LiquidMetal service providing unified LLM API for model inference
+- **Cerebras**: AI inference platform providing fast LLM API for model inference
 - **Tone of Voice Document**: A Linear Document defining the organization's communication style for job descriptions
 - **AI Pre-screening Agent**: Automated system component that evaluates candidate fit using AI
 - **NextJS**: Full-stack React framework used for building the application
@@ -78,12 +76,12 @@ This document specifies the requirements for an AI-enriched Applicant Tracking S
 
 ### Requirement 5
 
-**User Story:** As a system architect, I want to leverage LiquidMetal services for AI capabilities, so that the system has scalable and maintainable AI infrastructure.
+**User Story:** As a system architect, I want to leverage Cerebras for AI capabilities, so that the system has fast and reliable AI inference.
 
 #### Acceptance Criteria
 
-1. WHEN the ATS needs to store and retrieve Tone of Voice Documents or Applicant CVs for AI processing, THE ATS SHALL use LiquidMetal SmartBuckets to store the documents and automatically generate vector embeddings
-2. WHEN the ATS needs to perform LLM inference for Job Description generation or Candidate Screening, THE ATS SHALL use LiquidMetal SmartInference to execute the LLM operations
-3. WHEN an applicant uploads a CV file, THE ATS SHALL stream the file from NextJS to SmartBuckets for AI processing
-4. WHEN the file is stored in SmartBuckets, THE ATS SHALL store the public URL or reference identifier in the Linear Issue for human recruiter access
-5. WHEN the ATS performs semantic search or retrieval during screening, THE ATS SHALL query SmartBuckets using vector similarity search against the stored embeddings
+1. WHEN the ATS needs to perform LLM inference for Job Description generation or Candidate Screening, THE ATS SHALL use Cerebras API to execute the LLM operations
+2. WHEN an applicant uploads a CV file, THE ATS SHALL parse the document content using pdf-parse for PDF files and mammoth for DOC/DOCX files
+3. WHEN the CV content is extracted, THE ATS SHALL append the text content to the Linear Issue description separated by a line break
+4. WHEN an applicant uploads a CV file, THE ATS SHALL also store the file as a Linear Document attachment for human recruiter access
+5. WHEN generating job descriptions, THE ATS SHALL use the Cerebras llama-3.3-70b model with appropriate temperature and token settings for consistent, high-quality output

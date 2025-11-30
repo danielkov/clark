@@ -292,3 +292,15 @@ Looks like we're trying to use issue labels for a project. This is wrong. No wai
 ```
 
 It then proceeded to rename the variable `issueLabels` to `workspaceLabels`. This - of course - did nothing. It then decided to revert all of the changes that it made prior, which prevented the infinite loop issue, claiming that it was those changes that caused the failure. In reality, the fix was quite literally replacing `client.issueLabels` with `client.projectLabels`. This is by far the dumbest LLM coding mistake I've seen in the past year.
+
+## The Cerebras pivot
+
+For the first time, I'm going to update the spec. I opened spec mode and added this prompt:
+
+```
+I decided to pivot from using LiquidMetal to instead using Cerebras for inference. I've already implemented the client and added the env variables needed to .env.local. I also implemented the job description AI enhancement feature. Update the rest of the spec to use cerebras for AI features.
+```
+
+I wasn't sure if this would work. Updating existing spec, plan, etc isn't listed as one of the features of this mode. Seems like it did a good enough job initially. One thing that stood out, is it's hell-bent on adding caching for every expensive operation. We don't have a database, so it just adds caching to everything without any explanation. This is weird behaviour and I suspect the system prompt has a clause about caching expensive operations, but since we don't have an official database, the model just slaps "cache this" on things without knowing how.
+
+One thing I really liked, is that when it updates the plan, it looks at the project state. E.g.: I installed the required dependencies for PDF and DOCX processing while it was updating the spec and it saw that these were already added, so it moved them to the setup step, which is already marked as completed.

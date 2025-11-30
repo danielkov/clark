@@ -4,7 +4,8 @@
   - Initialize NextJS project with TypeScript and App Router
   - Install and configure WorkOS SDK for authentication
   - Install and configure Linear SDK for API integration
-  - Install and configure LiquidMetal SDK for AI services
+  - Install and configure Cerebras SDK for AI inference
+  - Install pdf-parse, mammoth, and file-type for document parsing
   - Install fast-check for property-based testing
   - Set up testing framework (Jest/Vitest) with TypeScript support
   - Configure environment variables for API keys and secrets
@@ -84,13 +85,14 @@
     - Test cache behavior on Project updates
     - _Requirements: 2.1, 2.2_
 
-- [ ] 5. Implement AI job description generation
-  - [ ] 5.1 Create LiquidMetal SmartInference integration
-    - Implement SmartInference client initialization
-    - Create generateJobDescription function with LLM prompt
+- [x] 5. Implement AI job description generation
+  - [x] 5.1 Create Cerebras integration
+    - Implement Cerebras client initialization
+    - Create enhanceJobDescription function with LLM prompt
     - Design prompt template using Project description and Tone of Voice
     - Implement error handling and retry logic for LLM calls
-    - _Requirements: 2.4, 5.2_
+    - Use llama-3.3-70b model with temperature 0.2
+    - _Requirements: 2.4, 5.1, 5.4_
   
   - [ ] 5.2 Implement AI generation trigger logic
     - Create checkAIGeneratedLabel function to verify label presence
@@ -112,6 +114,14 @@
     - Test error handling for LLM failures
     - Test label application logic
     - _Requirements: 2.4, 2.5_
+  
+  - [ ]* 5.6 Write property test for Cerebras usage
+    - **Property 17: Cerebras for LLM operations**
+    - **Validates: Requirements 5.1**
+  
+  - [ ]* 5.7 Write property test for model configuration
+    - **Property 21: Consistent model configuration for job descriptions**
+    - **Validates: Requirements 5.5**
 
 - [ ] 6. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
@@ -164,60 +174,80 @@
     - Test error message display
     - _Requirements: 3.1, 3.2_
 
-- [ ] 9. Implement candidate Issue creation
-  - [x] 9.1 Implement Linear Issue creation workflow
-    - Create createCandidateIssue function using Linear SDK
+- [ ] 9. Implement candidate Issue creation with CV parsing
+  - [ ] 9.1 Create CV parsing module
+    - Create parseCV function that accepts file buffer and file type
+    - Implement PDF parsing using pdf-parse library
+    - Implement DOC/DOCX parsing using mammoth library
+    - Use file-type to detect and validate file format
+    - Add error handling for corrupted or unsupported files
+    - Return extracted text content as string
+    - _Requirements: 5.2_
+  
+  - [ ] 9.2 Update Linear Issue creation workflow
+    - Update createCandidateIssue function to accept parsed CV text
+    - Append parsed CV text to Issue description after a line break
     - Implement CV upload as Linear Document attachment linked to Issue
     - Implement cover letter upload as Linear Document attachment (conditional)
     - Set Issue state to "Triage" on creation
-    - Update submitApplication in lib/actions/application.ts to call createCandidateIssue
-    - _Requirements: 3.3, 3.4, 3.5, 3.6_
+    - _Requirements: 3.3, 3.4, 3.5, 3.6, 5.3, 5.4_
   
-  - [ ] 9.2 Create LiquidMetal SmartBuckets integration
-    - Implement SmartBuckets client initialization
-    - Create uploadToSmartBuckets function with file streaming
-    - Implement retrieveFromSmartBuckets function for document access
-    - Add error handling and retry logic for uploads
-    - Store SmartBuckets reference URL in Issue description or custom field for AI access
-    - _Requirements: 5.1, 5.3, 5.4_
+  - [ ] 9.3 Update application submission flow
+    - Update submitApplication in lib/actions/application.ts
+    - Parse CV file using parseCV before creating Issue
+    - Pass parsed CV text to createCandidateIssue
+    - Handle parsing errors gracefully (create Issue without CV text if parsing fails)
+    - _Requirements: 3.3, 5.2, 5.3_
   
-  - [ ]* 9.3 Write property test for Issue creation
+  - [ ]* 9.4 Write property test for Issue creation
     - **Property 10: Issue creation for valid applications**
     - **Validates: Requirements 3.3**
   
-  - [ ]* 9.4 Write property test for document attachment
+  - [ ]* 9.5 Write property test for document attachment
     - **Property 11: Document attachment for applications**
     - **Validates: Requirements 3.4, 3.5**
   
-  - [ ]* 9.5 Write property test for initial Issue state
+  - [ ]* 9.6 Write property test for initial Issue state
     - **Property 12: Initial Issue state assignment**
     - **Validates: Requirements 3.6**
   
-  - [ ]* 9.6 Write property test for SmartBuckets storage
-    - **Property 17: SmartBuckets storage for AI documents**
-    - **Validates: Requirements 5.1, 5.3**
+  - [ ]* 9.7 Write property test for CV parsing
+    - **Property 18: CV parsing on upload**
+    - **Validates: Requirements 5.2**
   
-  - [ ]* 9.7 Write property test for dual storage
-    - **Property 19: Dual storage for applicant files**
+  - [ ]* 9.8 Write property test for CV content in Issue
+    - **Property 19: CV content in Issue description**
+    - **Validates: Requirements 5.3**
+  
+  - [ ]* 9.9 Write property test for Linear Document attachment
+    - **Property 20: Linear Document attachment for human access**
     - **Validates: Requirements 5.4**
+  
+  - [ ]* 9.10 Write unit tests for CV parsing
+    - Test PDF parsing with sample PDF files
+    - Test DOC/DOCX parsing with sample Word files
+    - Test error handling for corrupted files
+    - Test file type detection
+    - _Requirements: 5.2_
 
 - [ ] 10. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 11. Implement AI pre-screening agent
   - [ ] 11.1 Create AI screening logic
-    - Implement screenCandidate function using SmartInference
-    - Design prompt template for candidate evaluation with CV and Job Description
+    - Implement screenCandidate function using Cerebras API
+    - Design prompt template for candidate evaluation with Issue description (contains CV) and Job Description
+    - Use llama-3.3-70b model for screening
     - Create evaluateCandidateFit function to parse LLM response
     - Implement confidence scoring logic (high/low/ambiguous)
-    - _Requirements: 4.2_
+    - _Requirements: 4.2, 5.1_
   
   - [ ] 11.2 Implement screening workflow
     - Create triggerPreScreening function called on Issue creation
     - Implement check for "In Progress" Project status before triggering
-    - Retrieve CV content from SmartBuckets using reference
+    - Read Issue description directly (contains parsed CV text)
     - Retrieve Job Description from Linear Project
-    - Call screenCandidate with both inputs
+    - Call screenCandidate with Issue description and Job Description
     - _Requirements: 4.1, 4.2_
   
   - [ ]* 11.3 Write property test for AI pre-screening trigger
@@ -227,10 +257,6 @@
   - [ ]* 11.4 Write property test for AI screening inputs
     - **Property 14: AI screening inputs**
     - **Validates: Requirements 4.2**
-  
-  - [ ]* 11.5 Write property test for SmartInference usage
-    - **Property 18: SmartInference for LLM operations**
-    - **Validates: Requirements 5.2**
 
 - [ ] 12. Implement Issue state management based on AI results
   - [ ] 12.1 Create state transition logic
@@ -262,23 +288,7 @@
     - Test error handling for state transition failures
     - _Requirements: 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 13. Implement semantic search capabilities
-  - [ ] 13.1 Create vector search integration
-    - Implement searchSmartBuckets function with vector similarity
-    - Create query embedding generation for search terms
-    - Implement result ranking and filtering logic
-    - Add caching for frequently accessed embeddings
-    - _Requirements: 5.5_
-  
-  - [ ]* 13.2 Write property test for vector search
-    - **Property 20: Vector search for semantic operations**
-    - **Validates: Requirements 5.5**
-  
-  - [ ]* 13.3 Write unit tests for semantic search
-    - Test vector search with various query types
-    - Test result ranking logic
-    - Test embedding cache behavior
-    - _Requirements: 5.5_
+
 
 - [ ] 14. Implement error handling and resilience
   - [ ] 14.1 Add comprehensive error handling
