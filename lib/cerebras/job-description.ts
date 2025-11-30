@@ -33,26 +33,35 @@ Return the final answer in clean, well-structured Markdown, formatted as a profe
 Ensure the structure is clear, readable, and polished, using appropriate Markdown headings and bullet lists.`
 
 export async function enhanceJobDescription(original: string, toneOfVoice: string): Promise<string | undefined> {
-    const completion = await cerebras.chat.completions.create({
-        messages: [
-            {
-                role: "system",
-                content: systemPrompt,
-            },
-            {
-                role: "user",
-                content: `Rough job description: ${original} --- Tone of Voice guide: ${toneOfVoice}`,
-            },
-        ],
-        model: "llama-3.3-70b",
-        max_completion_tokens: 1024,
-        temperature: 0.2,
-        top_p: 1,
-        stream: false,
-    });
+    try {
+        const completion = await cerebras.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: systemPrompt,
+                },
+                {
+                    role: "user",
+                    content: `Rough job description: ${original} --- Tone of Voice guide: ${toneOfVoice}`,
+                },
+            ],
+            model: "llama-3.3-70b",
+            max_completion_tokens: 1024,
+            temperature: 0.2,
+            top_p: 1,
+            stream: false,
+        });
 
-    // @ts-expect-error types don't seemt to want to resolve here.
-    const output = completion.choices?.[0]?.message?.content;
+        // @ts-expect-error types don't seemt to want to resolve here.
+        const output = completion.choices?.[0]?.message?.content;
 
-    return output;
+        if (!output) {
+            throw new Error('No content generated from LLM');
+        }
+
+        return output;
+    } catch (error) {
+        console.error('Error enhancing job description:', error);
+        throw error;
+    }
 }

@@ -11,6 +11,7 @@ import { validateApplication, validateFile } from '@/lib/validation';
 import { ApplicationResult } from '@/types';
 import { createCandidateIssue } from '@/lib/linear/issues';
 import { parseCV } from '@/lib/linear/cv-parser';
+import { getUserFriendlyErrorMessage } from '@/lib/utils/retry';
 
 /**
  * Submits a job application
@@ -102,11 +103,15 @@ export async function submitApplication(
 
   } catch (error) {
     console.error('Application submission error:', error);
+    
+    // Provide user-friendly error message
+    const errorMessage = getUserFriendlyErrorMessage(error);
+    
     return {
       success: false,
       errors: [{
         field: 'submit',
-        message: 'An unexpected error occurred while processing your application'
+        message: errorMessage || 'An unexpected error occurred while processing your application. Please try again.'
       }]
     };
   }

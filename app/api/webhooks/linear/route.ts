@@ -12,6 +12,7 @@ import { createLinearClient } from '@/lib/linear/client';
 import { getToneOfVoiceContent } from '@/lib/linear/documents';
 import { enhanceJobDescription } from '@/lib/cerebras/job-description';
 import { triggerPreScreening } from '@/lib/linear/pre-screening';
+import { withRetry, isRetryableError } from '@/lib/utils/retry';
 
 /**
  * Verify webhook signature using HMAC
@@ -122,9 +123,16 @@ async function handleProjectChange(event: any): Promise<void> {
     // Get tone of voice content
     const toneOfVoice = await getToneOfVoiceContent(initiative.id, client);
 
-    // Enhance the job description
+    // Enhance the job description with retry logic
     console.log('Calling AI enhancement...');
-    const enhancedContent = await enhanceJobDescription(originalContent, toneOfVoice);
+    const enhancedContent = await withRetry(
+      () => enhanceJobDescription(originalContent, toneOfVoice),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
 
     if (!enhancedContent) {
       console.error('AI enhancement returned no content');

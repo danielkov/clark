@@ -8,6 +8,7 @@
 import { createLinearClient } from './client';
 import { ScreeningResult } from '@/types';
 import { WorkflowState } from '@linear/sdk';
+import { withRetry, isRetryableError } from '../utils/retry';
 
 /**
  * Determine the appropriate Issue state based on AI screening result
@@ -122,8 +123,15 @@ export async function updateIssueState(
     // Create Linear client
     const client = createLinearClient(linearAccessToken);
     
-    // Fetch the Issue
-    const issue = await client.issue(issueId);
+    // Fetch the Issue with retry logic
+    const issue = await withRetry(
+      () => client.issue(issueId),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
     
     if (!issue) {
       console.error('Issue not found:', issueId);
@@ -158,10 +166,17 @@ export async function updateIssueState(
       return true; // Already in target state, consider it successful
     }
     
-    // Update the Issue state
-    const updatePayload = await client.updateIssue(issueId, {
-      stateId: targetState.id,
-    });
+    // Update the Issue state with retry logic
+    const updatePayload = await withRetry(
+      () => client.updateIssue(issueId, {
+        stateId: targetState.id,
+      }),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
     
     if (!updatePayload.success) {
       console.error('Failed to update Issue state:', updatePayload);
@@ -231,11 +246,18 @@ export async function addIssueComment(
     // Create Linear client
     const client = createLinearClient(linearAccessToken);
     
-    // Create the comment
-    const commentPayload = await client.createComment({
-      issueId,
-      body: commentBody,
-    });
+    // Create the comment with retry logic
+    const commentPayload = await withRetry(
+      () => client.createComment({
+        issueId,
+        body: commentBody,
+      }),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
     
     if (!commentPayload.success) {
       console.error('Failed to create comment:', commentPayload);

@@ -8,6 +8,7 @@
 import { createLinearClient } from './client';
 import { Issue } from '@linear/sdk';
 import { getOrgConfig } from '../redis';
+import { withRetry, isRetryableError } from '../utils/retry';
 
 /**
  * Create a candidate Issue in Linear for a job application
@@ -39,8 +40,15 @@ export async function createCandidateIssue(
   // Create Linear client with org token
   const client = createLinearClient(config.accessToken);
   
-  // Fetch the project to get team information
-  const project = await client.project(projectId);
+  // Fetch the project to get team information with retry logic
+  const project = await withRetry(
+    () => client.project(projectId),
+    {
+      maxAttempts: 3,
+      initialDelayMs: 1000,
+      shouldRetry: isRetryableError,
+    }
+  );
   
   if (!project) {
     throw new Error('Project not found');
@@ -89,15 +97,21 @@ ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
     issueDescription += `\n\n---\n\n## CV Content\n\n${parsedCVText}`;
   }
   
-  // Create the Issue
-  const issuePayload = await client.createIssue({
-    teamId: team.id,
-    title: issueTitle,
-    description: issueDescription,
-    stateId: initialStateId,
-    projectId: projectId,
-    
-  });
+  // Create the Issue with retry logic
+  const issuePayload = await withRetry(
+    () => client.createIssue({
+      teamId: team.id,
+      title: issueTitle,
+      description: issueDescription,
+      stateId: initialStateId,
+      projectId: projectId,
+    }),
+    {
+      maxAttempts: 3,
+      initialDelayMs: 1000,
+      shouldRetry: isRetryableError,
+    }
+  );
   
   if (!issuePayload.success || !issuePayload.issue) {
     throw new Error('Failed to create candidate Issue');
@@ -126,21 +140,36 @@ ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
     }
   }
   
-  // Upload CV as a Linear attachment
-  await uploadFileToIssue(
-    client,
-    issue.id,
-    candidateData.cvFile,
-    `${candidateData.name} - CV`
-  );
-  
-  // Upload cover letter if provided
-  if (candidateData.coverLetterFile) {
-    await uploadFileToIssue(
+  // Upload CV as a Linear attachment with retry logic
+  await withRetry(
+    () => uploadFileToIssue(
       client,
       issue.id,
-      candidateData.coverLetterFile,
-      `${candidateData.name} - Cover Letter`
+      candidateData.cvFile,
+      `${candidateData.name} - CV`
+    ),
+    {
+      maxAttempts: 3,
+      initialDelayMs: 1000,
+      shouldRetry: isRetryableError,
+    }
+  );
+  
+  // Upload cover letter if provided with retry logic
+  if (candidateData.coverLetterFile) {
+    const coverLetter = candidateData.coverLetterFile;
+    await withRetry(
+      () => uploadFileToIssue(
+        client,
+        issue.id,
+        coverLetter,
+        `${candidateData.name} - Cover Letter`
+      ),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
     );
   }
   

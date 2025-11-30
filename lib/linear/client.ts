@@ -8,6 +8,7 @@ import { LinearClient } from '@linear/sdk';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { getLinearTokens, storeLinearTokens, isLinearTokenExpired } from './metadata';
 import { refreshLinearToken } from './oauth';
+import { withRetry, isRetryableError } from '../utils/retry';
 
 /**
  * Get authenticated Linear client for current user
@@ -30,8 +31,14 @@ export async function getLinearClient(): Promise<LinearClient> {
   // Check if token is expired and refresh if needed
   if (isLinearTokenExpired(tokens)) {
     try {
-      const { accessToken, refreshToken, expiresIn } = await refreshLinearToken(
-        tokens.refreshToken
+      // Retry token refresh with exponential backoff
+      const { accessToken, refreshToken, expiresIn } = await withRetry(
+        () => refreshLinearToken(tokens.refreshToken),
+        {
+          maxAttempts: 3,
+          initialDelayMs: 1000,
+          shouldRetry: isRetryableError,
+        }
       );
 
       // Calculate new expiry

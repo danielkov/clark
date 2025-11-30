@@ -14,6 +14,7 @@ import {
   generateReasoningComment, 
   addIssueComment 
 } from './state-management';
+import { withRetry, isRetryableError } from '../utils/retry';
 
 /**
  * Trigger AI pre-screening for a newly created candidate Issue
@@ -85,8 +86,15 @@ export async function triggerPreScreening(
     
     console.log('Triggering AI pre-screening for Issue:', issueId);
     
-    // Call the AI screening function
-    const screeningResult = await screenCandidate(issueDescription, jobDescription);
+    // Call the AI screening function with retry logic
+    const screeningResult = await withRetry(
+      () => screenCandidate(issueDescription, jobDescription),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
     
     console.log('Pre-screening completed:', {
       issueId,

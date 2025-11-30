@@ -116,12 +116,14 @@ export async function screenCandidate(
   } catch (error) {
     console.error('Error screening candidate:', error);
     
-    // Fallback to manual triage on error
+    // Fallback to manual triage on error (Requirements: 4.1 - fallback for AI failures)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
     return {
       confidence: 'ambiguous',
-      reasoning: 'AI screening failed. Manual review required.',
+      reasoning: `AI screening failed: ${errorMessage}. Manual review required.`,
       matchedCriteria: [],
-      concerns: ['AI screening service error'],
+      concerns: ['AI screening service error - system will default to manual triage'],
       recommendedState: 'Triage',
     };
   }
