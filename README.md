@@ -97,9 +97,7 @@ The system uses Linear as the single source of truth:
 - **Issues**: Candidates/applicants
 - **Documents**: CVs, cover letters, tone of voice guides
 
-AI capabilities are provided by LiquidMetal:
-- **SmartBuckets**: Document storage with vector embeddings
-- **SmartInference**: LLM operations for job descriptions and candidate screening
+AI capabilities are provided by Cerebras
 
 ## License
 
