@@ -21,7 +21,7 @@ function generateCorrelationId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
 }
 
-export default async function middleware(request: NextRequest, event: NextFetchEvent) {
+export default async function proxy(request: NextRequest, event: NextFetchEvent) {
   // Generate or extract correlation ID
   const correlationId = request.headers.get('x-correlation-id') || generateCorrelationId();
   
