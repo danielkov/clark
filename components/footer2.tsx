@@ -26,7 +26,7 @@ interface Footer2Props {
 
 const Footer2 = ({
   logo = {
-    src: "https://deifkwefumgah.cloudfront.net/shadcnblocks/block/block-1.svg",
+    src: "/ht_logo_nobg.png",
     alt: "Hiring Team Logo",
     title: "Hiring Team",
     url: "/",
@@ -86,7 +86,7 @@ const Footer2 = ({
                     src={logo.src}
                     alt={logo.alt}
                     title={logo.title}
-                    className="h-10 dark:invert"
+                    className="h-10"
                   />
                   <LogoText className="text-xl">{logo.title}</LogoText>
                 </Logo>

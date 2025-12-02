@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Book, Menu, Sunset, Trees, Zap } from "lucide-react";
 
 import {
@@ -58,7 +59,7 @@ interface Navbar1Props {
 const Navbar1 = ({
   logo = {
     url: "/",
-    src: "https://deifkwefumgah.cloudfront.net/shadcnblocks/block/logos/shadcnblockscom-icon.svg",
+    src: "/ht_logo_nobg.png",
     alt: "Hiring Team Logo",
     title: "Hiring Team",
   },
@@ -80,9 +81,11 @@ const Navbar1 = ({
           <div className="flex items-center gap-6">
             {/* Logo */}
             <a href={logo.url} className="flex items-center gap-2">
-              <img
+              <Image
                 src={logo.src}
-                className="max-h-8 dark:invert"
+                width={32}
+                height={32}
+                className="h-8 w-auto"
                 alt={logo.alt}
               />
               <span className="text-lg font-semibold tracking-tighter">
@@ -112,9 +115,11 @@ const Navbar1 = ({
           <div className="flex items-center justify-between">
             {/* Logo */}
             <a href={logo.url} className="flex items-center gap-2">
-              <img
+              <Image
                 src={logo.src}
-                className="max-h-8 dark:invert"
+                width={32}
+                height={32}
+                className="h-8 w-auto"
                 alt={logo.alt}
               />
             </a>
@@ -128,9 +133,11 @@ const Navbar1 = ({
                 <SheetHeader>
                   <SheetTitle>
                     <a href={logo.url} className="flex items-center gap-2">
-                      <img
+                      <Image
                         src={logo.src}
-                        className="max-h-8 dark:invert"
+                        width={32}
+                        height={32}
+                        className="h-8 w-auto"
                         alt={logo.alt}
                       />
                     </a>

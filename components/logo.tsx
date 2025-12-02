@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Download } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -96,14 +97,16 @@ const Logo = ({ url, className, children, ...props }: LogoProps) => {
 };
 
 const LogoImage = ({ src, alt, className, ...props }: LogoImageProps) => (
-  <img src={src} alt={alt} className={cn("block h-8", className)} {...props} />
+  <Image src={src} alt={alt} width={32} height={32} className={cn("block h-8 w-auto", className)} {...props} />
 );
 
 const LogoImageMobile = ({ src, alt, className, ...props }: LogoImageProps) => (
-  <img
+  <Image
     src={src}
     alt={alt}
-    className={cn("flex h-8 md:hidden", className)}
+    width={32}
+    height={32}
+    className={cn("flex h-8 w-auto md:hidden", className)}
     {...props}
   />
 );
@@ -114,10 +117,12 @@ const LogoImageDesktop = ({
   className,
   ...props
 }: LogoImageProps) => (
-  <img
+  <Image
     src={src}
     alt={alt}
-    className={cn("hidden h-8 md:flex", className)}
+    width={32}
+    height={32}
+    className={cn("hidden h-8 w-auto md:flex", className)}
     {...props}
   />
 );
