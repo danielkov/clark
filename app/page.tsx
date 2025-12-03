@@ -26,7 +26,7 @@ export default async function HomePage() {
   const pricingTiers = await getPricingTiers();
 
   return (
-    <main className='flex flex-col items-center'>
+    <main className='flex flex-col items-center px-6 md:px-0'>
       <Navbar1 auth={
       {
         login: {
