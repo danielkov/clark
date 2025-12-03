@@ -4,6 +4,8 @@ import { cerebras } from "./client";
 import { trackAIOperation, measureDuration } from "@/lib/datadog/metrics";
 import { logger } from "@/lib/datadog/logger";
 import { emitAIOperationFailure } from "@/lib/datadog/events";
+import { checkMeterBalance, recordUsageEvent } from "@/lib/polar/usage-meters";
+import { InsufficientBalanceError } from "@/types";
 
 const systemPrompt = `You are an expert HR copywriter and job-description specialist. Your task is to transform a rough job description into a clear, comprehensive, and professional job posting.
 
@@ -35,7 +37,12 @@ Return the final answer in clean, well-structured Markdown, formatted as a profe
 
 Ensure the structure is clear, readable, and polished, using appropriate Markdown headings and bullet lists.`
 
-export async function enhanceJobDescription(original: string, toneOfVoice: string): Promise<string | undefined> {
+export async function enhanceJobDescription(
+    original: string,
+    toneOfVoice: string,
+    linearOrgId: string,
+    metadata?: Record<string, any>
+): Promise<string | undefined> {
     const startTime = Date.now();
     let success = false;
     let errorType: string | undefined;
@@ -44,6 +51,31 @@ export async function enhanceJobDescription(original: string, toneOfVoice: strin
         logger.info('Starting job description enhancement', {
             originalLength: original.length,
             toneOfVoiceLength: toneOfVoice.length,
+            linearOrgId,
+        });
+
+        // Check meter balance before generation
+        // Requirements: 2.1, 10.1
+        const balanceCheck = await checkMeterBalance(linearOrgId, 'job_descriptions');
+
+        if (!balanceCheck.allowed && !balanceCheck.unlimited) {
+            logger.warn('Insufficient balance for job description generation', {
+                linearOrgId,
+                balance: balanceCheck.balance,
+                limit: balanceCheck.limit,
+            });
+
+            throw new InsufficientBalanceError(
+                `You have reached your job description generation limit. Current balance: ${balanceCheck.balance}/${balanceCheck.limit}. Please upgrade your subscription to continue.`,
+                balanceCheck.balance,
+                balanceCheck.limit
+            );
+        }
+
+        logger.info('Meter balance check passed', {
+            linearOrgId,
+            balance: balanceCheck.balance,
+            unlimited: balanceCheck.unlimited,
         });
 
         const { result: completion, duration } = await measureDuration(() =>
@@ -86,6 +118,21 @@ export async function enhanceJobDescription(original: string, toneOfVoice: strin
         logger.info('Job description enhancement completed', {
             duration,
             outputLength: output.length,
+            linearOrgId,
+        });
+
+        // Record usage event after successful generation
+        // Requirements: 2.2, 4.4, 10.3
+        await recordUsageEvent(linearOrgId, 'job_descriptions', {
+            userId: metadata?.userId,
+            resourceId: metadata?.resourceId,
+            originalLength: original.length,
+            outputLength: output.length,
+            duration,
+        });
+
+        logger.info('Usage event recorded for job description generation', {
+            linearOrgId,
         });
 
         return output;

@@ -14,6 +14,7 @@ import { parseCV } from '@/lib/linear/cv-parser';
 import { getUserFriendlyErrorMessage } from '@/lib/utils/retry';
 import { logger, generateCorrelationId } from '@/lib/datadog/logger';
 import { createSpan } from '@/lib/datadog/metrics';
+import { checkMeterBalance } from '@/lib/polar/usage-meters';
 
 /**
  * Submits a job application
@@ -78,6 +79,33 @@ export async function submitApplication(
         success: false,
         errors: validationErrors
       };
+    }
+
+    // Check meter balance for candidate screening before processing
+    // Requirements: 8.2 - Block operations when meter is exhausted
+    try {
+      const balanceCheck = await checkMeterBalance(linearOrg, 'candidate_screenings');
+      
+      if (!balanceCheck.allowed && !balanceCheck.unlimited) {
+        logger.warn('Insufficient balance for candidate screening', {
+          linearOrg,
+          balance: balanceCheck.balance,
+          limit: balanceCheck.limit,
+        });
+
+        return {
+          success: false,
+          errors: [{
+            field: 'submit',
+            message: `You have reached your candidate screening limit. Current balance: ${balanceCheck.balance}/${balanceCheck.limit}. Please upgrade your subscription to continue accepting applications.`
+          }]
+        };
+      }
+    } catch (error) {
+      // Log error but continue - we don't want to block applications due to meter check failures
+      logger.error('Failed to check meter balance', error instanceof Error ? error : new Error(String(error)), {
+        linearOrg,
+      });
     }
 
     // Parse CV file to extract text content (Requirements: 5.2, 5.3)

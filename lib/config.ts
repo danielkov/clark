@@ -5,6 +5,7 @@
  * - WorkOS (Authentication)
  * - Linear (Data source)
  * - LiquidMetal (AI services)
+ * - Polar (Subscription management)
  */
 
 export const config = {
@@ -23,6 +24,19 @@ export const config = {
     apiKey: process.env.LIQUIDMETAL_API_KEY || '',
     smartBucketsEndpoint: process.env.LIQUIDMETAL_SMARTBUCKETS_ENDPOINT || '',
     smartInferenceEndpoint: process.env.LIQUIDMETAL_SMARTINFERENCE_ENDPOINT || '',
+  },
+  polar: {
+    accessToken: process.env.POLAR_ACCESS_TOKEN || '',
+    webhookSecret: process.env.POLAR_WEBHOOK_SECRET || '',
+    products: {
+      free: process.env.POLAR_FREE_PRODUCT_ID || '',
+      pro: process.env.POLAR_PRO_PRODUCT_ID || '',
+      enterprise: process.env.POLAR_ENTERPRISE_PRODUCT_ID || '',
+    },
+    meters: {
+      jobDescriptions: process.env.POLAR_JOB_DESCRIPTIONS_METER_ID || '',
+      candidateScreenings: process.env.POLAR_CANDIDATE_SCREENINGS_METER_ID || '',
+    },
   },
   app: {
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
@@ -45,6 +59,7 @@ export function validateConfig(): { valid: boolean; missing: string[] } {
     'LINEAR_CLIENT_SECRET',
     'LIQUIDMETAL_API_KEY',
     'SESSION_SECRET',
+    'POLAR_ACCESS_TOKEN',
   ];
 
   const missing = required.filter((key) => !process.env[key]);

@@ -6,7 +6,11 @@ import { hasATSContainer, getATSContainer } from "@/lib/linear/initiatives";
 import { checkATSContainerToneOfVoice } from "@/lib/linear/initiatives-actions";
 import { ToneOfVoiceSetup } from "@/components/tone-of-voice-setup";
 import { RedisTokenStatus } from "@/components/redis-token-status";
+import { MeterBalanceWidget } from "@/components/meter-balance-widget";
+import { UsageLimitWarning } from "@/components/usage-limit-warning";
+import { getMetersAction } from "@/lib/actions/usage";
 import { ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 export default async function DashboardPage() {
   const { user } = await withAuth({ ensureSignedIn: true });
@@ -70,6 +74,21 @@ export default async function DashboardPage() {
   } catch (error) {
     console.error("Failed to fetch Linear organization:", error);
     linearError = error instanceof Error ? error.message : "Unknown error";
+  }
+
+  // Get meter balances for usage tracking
+  let meterBalances = null;
+  let metersError = null;
+  try {
+    const metersResult = await getMetersAction();
+    if (metersResult.success && metersResult.data) {
+      meterBalances = metersResult.data;
+    } else {
+      metersError = metersResult.error || "Failed to load usage data";
+    }
+  } catch (error) {
+    console.error("Failed to fetch meter balances:", error);
+    metersError = error instanceof Error ? error.message : "Unknown error";
   }
 
   return (
@@ -173,6 +192,68 @@ export default async function DashboardPage() {
             </Button>
           </form>
         </div>
+
+        {/* Usage Meters Section */}
+        {meterBalances && meterBalances.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Usage & Billing</h2>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/subscription">Manage Subscription</Link>
+              </Button>
+            </div>
+
+            {/* Display usage warnings for low balances */}
+            {meterBalances.map((meter) => {
+              const percentageRemaining = meter.unlimited
+                ? 100
+                : meter.creditedUnits > 0
+                ? Math.round((meter.balance / meter.creditedUnits) * 100)
+                : 0;
+
+              // Show warning if balance is below 20%
+              if (!meter.unlimited && percentageRemaining < 20) {
+                return (
+                  <UsageLimitWarning
+                    key={meter.meterName}
+                    meterName={meter.meterName}
+                    balance={meter.balance}
+                    creditedUnits={meter.creditedUnits}
+                  />
+                );
+              }
+              return null;
+            })}
+
+            {/* Meter Balance Widgets Grid */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {meterBalances.map((meter) => (
+                <MeterBalanceWidget
+                  key={meter.meterName}
+                  meterName={meter.meterName}
+                  balance={meter.balance}
+                  consumedUnits={meter.consumedUnits}
+                  creditedUnits={meter.creditedUnits}
+                  unlimited={meter.unlimited}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {metersError && (
+          <div className="border border-yellow-500 bg-yellow-50 rounded-lg p-4">
+            <h3 className="font-semibold text-yellow-800 mb-1">
+              Usage Data Unavailable
+            </h3>
+            <p className="text-sm text-yellow-700">
+              Unable to load usage meter data. Some features may be limited.
+            </p>
+            <Button asChild variant="outline" size="sm" className="mt-2">
+              <Link href="/subscription">View Subscription</Link>
+            </Button>
+          </div>
+        )}
 
         {!linearError && !onboardingError && (
           <div className="border rounded-lg p-6">

@@ -3,6 +3,21 @@
  */
 
 /**
+ * Custom error for insufficient usage balance
+ * Thrown when a user attempts an operation that would exceed their usage limits
+ */
+export class InsufficientBalanceError extends Error {
+  constructor(
+    message: string,
+    public balance: number,
+    public limit: number | null
+  ) {
+    super(message);
+    this.name = 'InsufficientBalanceError';
+  }
+}
+
+/**
  * User session data stored after authentication
  */
 export interface UserSession {

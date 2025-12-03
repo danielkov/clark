@@ -1,10 +1,11 @@
 'use server';
 
 import { cerebras } from "./client";
-import { ScreeningResult } from "@/types";
+import { ScreeningResult, InsufficientBalanceError } from "@/types";
 import { trackAIOperation, measureDuration } from "@/lib/datadog/metrics";
 import { logger } from "@/lib/datadog/logger";
 import { emitAIOperationFailure } from "@/lib/datadog/events";
+import { checkMeterBalance, recordUsageEvent } from "@/lib/polar/usage-meters";
 
 const systemPrompt = `You are an expert technical recruiter and candidate screening specialist. Your task is to evaluate whether a candidate is a good fit for a specific job opening based on their CV and the job description.
 
@@ -51,11 +52,15 @@ Important: Return ONLY the JSON object, no additional text or formatting.`;
  * 
  * @param cvContent The candidate's CV content (from Issue description)
  * @param jobDescription The job description from the Linear Project
+ * @param linearOrgId Linear organization ID for usage tracking
+ * @param metadata Optional metadata to include with usage event
  * @returns Structured screening result with confidence and reasoning
  */
 export async function screenCandidate(
   cvContent: string,
-  jobDescription: string
+  jobDescription: string,
+  linearOrgId: string,
+  metadata?: Record<string, any>
 ): Promise<ScreeningResult> {
   const startTime = Date.now();
   let success = false;
@@ -65,6 +70,31 @@ export async function screenCandidate(
     logger.info('Starting candidate screening', {
       cvContentLength: cvContent.length,
       jobDescriptionLength: jobDescription.length,
+      linearOrgId,
+    });
+
+    // Check meter balance before screening
+    // Requirements: 2.3, 10.2
+    const balanceCheck = await checkMeterBalance(linearOrgId, 'candidate_screenings');
+
+    if (!balanceCheck.allowed && !balanceCheck.unlimited) {
+      logger.warn('Insufficient balance for candidate screening', {
+        linearOrgId,
+        balance: balanceCheck.balance,
+        limit: balanceCheck.limit,
+      });
+
+      throw new InsufficientBalanceError(
+        `You have reached your candidate screening limit. Current balance: ${balanceCheck.balance}/${balanceCheck.limit}. Please upgrade your subscription to continue.`,
+        balanceCheck.balance,
+        balanceCheck.limit
+      );
+    }
+
+    logger.info('Meter balance check passed', {
+      linearOrgId,
+      balance: balanceCheck.balance,
+      unlimited: balanceCheck.unlimited,
     });
 
     const { result: completion, duration } = await measureDuration(() =>
@@ -134,6 +164,23 @@ export async function screenCandidate(
       duration,
       confidence: parsed.confidence,
       recommendedState,
+      linearOrgId,
+    });
+
+    // Record usage event after successful screening
+    // Requirements: 2.4, 4.5, 10.3
+    await recordUsageEvent(linearOrgId, 'candidate_screenings', {
+      userId: metadata?.userId,
+      resourceId: metadata?.resourceId,
+      cvContentLength: cvContent.length,
+      jobDescriptionLength: jobDescription.length,
+      confidence: parsed.confidence,
+      recommendedState,
+      duration,
+    });
+
+    logger.info('Usage event recorded for candidate screening', {
+      linearOrgId,
     });
 
     return {

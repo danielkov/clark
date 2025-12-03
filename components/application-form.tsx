@@ -17,6 +17,7 @@ import { ValidationError } from '@/types';
 import { Upload, X, FileText, CheckCircle2 } from 'lucide-react';
 import { useState, useRef, DragEvent, ChangeEvent, FormEvent } from 'react';
 
+
 interface ApplicationFormProps {
   jobId: string;
   linearOrg: string;
@@ -253,7 +254,8 @@ export function ApplicationForm({ jobId, linearOrg, onSuccess }: ApplicationForm
       }
     } catch (error) {
       console.error('Application submission error:', error);
-      setErrors({ submit: 'An unexpected error occurred. Please try again.' });
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
+      setErrors({ submit: errorMessage });
     } finally {
       setIsSubmitting(false);
     }

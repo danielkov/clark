@@ -96,11 +96,11 @@ const Logo = ({ url, className, children, ...props }: LogoProps) => {
   );
 };
 
-const LogoImage = ({ src, alt, className, ...props }: LogoImageProps) => (
+const LogoImage = ({ src, alt, className, width, height, ...props }: LogoImageProps) => (
   <Image src={src} alt={alt} width={32} height={32} className={cn("block h-8 w-auto", className)} {...props} />
 );
 
-const LogoImageMobile = ({ src, alt, className, ...props }: LogoImageProps) => (
+const LogoImageMobile = ({ src, alt, className, width, height, ...props }: LogoImageProps) => (
   <Image
     src={src}
     alt={alt}
@@ -115,6 +115,8 @@ const LogoImageDesktop = ({
   src,
   alt,
   className,
+  width,
+  height,
   ...props
 }: LogoImageProps) => (
   <Image

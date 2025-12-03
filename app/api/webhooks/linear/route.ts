@@ -138,7 +138,10 @@ async function handleProjectChange(event: any): Promise<void> {
     // Enhance the job description with retry logic
     logger.info('Calling AI enhancement', { projectId });
     const enhancedContent = await withRetry(
-      () => enhanceJobDescription(originalContent, toneOfVoice),
+      () => enhanceJobDescription(originalContent, toneOfVoice, orgConfig.orgId, {
+        userId: 'webhook',
+        resourceId: projectId,
+      }),
       {
         maxAttempts: 3,
         initialDelayMs: 1000,
@@ -242,7 +245,8 @@ async function handleIssueCreation(event: any): Promise<void> {
     const screeningResult = await triggerPreScreening(
       orgConfig.accessToken,
       issueId,
-      orgConfig.atsContainerInitiativeId
+      orgConfig.atsContainerInitiativeId,
+      orgConfig.orgId
     );
     
     if (screeningResult) {

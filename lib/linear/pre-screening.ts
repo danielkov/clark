@@ -22,12 +22,14 @@ import { withRetry, isRetryableError } from '../utils/retry';
  * @param linearAccessToken Linear access token for the organization
  * @param issueId The ID of the candidate Issue
  * @param atsContainerInitiativeId The ID of the ATS Container Initiative
+ * @param linearOrgId Linear organization ID for usage tracking
  * @returns Screening result or null if screening was not triggered
  */
 export async function triggerPreScreening(
   linearAccessToken: string,
   issueId: string,
-  atsContainerInitiativeId: string
+  atsContainerInitiativeId: string,
+  linearOrgId: string
 ): Promise<ScreeningResult | null> {
   try {
     // Create Linear client
@@ -88,7 +90,10 @@ export async function triggerPreScreening(
     
     // Call the AI screening function with retry logic
     const screeningResult = await withRetry(
-      () => screenCandidate(issueDescription, jobDescription),
+      () => screenCandidate(issueDescription, jobDescription, linearOrgId, {
+        userId: 'webhook',
+        resourceId: issueId,
+      }),
       {
         maxAttempts: 3,
         initialDelayMs: 1000,
