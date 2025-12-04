@@ -72,20 +72,10 @@ async function getLinearOrgId(): Promise<string> {
  */
 export async function getTiersAction(): Promise<SubscriptionActionResult<SubscriptionTier[]>> {
   try {
-    // Ensure user is authenticated
-    const { user } = await withAuth();
-
-    if (!user) {
-      return {
-        success: false,
-        error: 'Authentication required',
-      };
-    }
-
+    // Tiers are public information, no authentication required
     const tiers = getTiers();
 
     logger.info('Retrieved subscription tiers', {
-      userId: user.id,
       tierCount: tiers.length,
     });
 

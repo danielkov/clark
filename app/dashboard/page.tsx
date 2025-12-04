@@ -194,66 +194,81 @@ export default async function DashboardPage() {
         </div>
 
         {/* Usage Meters Section */}
-        {meterBalances && meterBalances.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Usage & Billing</h2>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/subscription">Manage Subscription</Link>
-              </Button>
-            </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Usage & Billing</h2>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/subscription">Manage Subscription</Link>
+            </Button>
+          </div>
 
-            {/* Display usage warnings for low balances */}
-            {meterBalances.map((meter) => {
-              const percentageRemaining = meter.unlimited
-                ? 100
-                : meter.creditedUnits > 0
-                ? Math.round((meter.balance / meter.creditedUnits) * 100)
-                : 0;
+          {meterBalances && meterBalances.length > 0 ? (
+            <>
+              {/* Display usage warnings for low balances */}
+              {meterBalances.map((meter) => {
+                const percentageRemaining = meter.unlimited
+                  ? 100
+                  : meter.creditedUnits > 0
+                  ? Math.round((meter.balance / meter.creditedUnits) * 100)
+                  : 0;
 
-              // Show warning if balance is below 20%
-              if (!meter.unlimited && percentageRemaining < 20) {
-                return (
-                  <UsageLimitWarning
+                // Show warning if balance is below 20%
+                if (!meter.unlimited && percentageRemaining < 20) {
+                  return (
+                    <UsageLimitWarning
+                      key={meter.meterName}
+                      meterName={meter.meterName}
+                      balance={meter.balance}
+                      creditedUnits={meter.creditedUnits}
+                    />
+                  );
+                }
+                return null;
+              })}
+
+              {/* Meter Balance Widgets Grid */}
+              <div className="grid gap-4 md:grid-cols-2">
+                {meterBalances.map((meter) => (
+                  <MeterBalanceWidget
                     key={meter.meterName}
                     meterName={meter.meterName}
                     balance={meter.balance}
+                    consumedUnits={meter.consumedUnits}
                     creditedUnits={meter.creditedUnits}
+                    unlimited={meter.unlimited}
                   />
-                );
-              }
-              return null;
-            })}
-
-            {/* Meter Balance Widgets Grid */}
-            <div className="grid gap-4 md:grid-cols-2">
-              {meterBalances.map((meter) => (
-                <MeterBalanceWidget
-                  key={meter.meterName}
-                  meterName={meter.meterName}
-                  balance={meter.balance}
-                  consumedUnits={meter.consumedUnits}
-                  creditedUnits={meter.creditedUnits}
-                  unlimited={meter.unlimited}
-                />
-              ))}
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="border rounded-lg p-6 space-y-4">
+              <div>
+                <h3 className="font-semibold mb-2">Get Started with a Subscription</h3>
+                <p className="text-sm text-muted-foreground">
+                  Subscribe to unlock AI-powered job descriptions and candidate screenings.
+                  Choose a plan that fits your hiring needs.
+                </p>
+              </div>
+              <Button asChild>
+                <Link href="/subscription">View Plans & Subscribe</Link>
+              </Button>
             </div>
-          </div>
-        )}
+          )}
 
-        {metersError && (
-          <div className="border border-yellow-500 bg-yellow-50 rounded-lg p-4">
-            <h3 className="font-semibold text-yellow-800 mb-1">
-              Usage Data Unavailable
-            </h3>
-            <p className="text-sm text-yellow-700">
-              Unable to load usage meter data. Some features may be limited.
-            </p>
-            <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href="/subscription">View Subscription</Link>
-            </Button>
-          </div>
-        )}
+          {metersError && (
+            <div className="border border-yellow-500 bg-yellow-50 rounded-lg p-4">
+              <h3 className="font-semibold text-yellow-800 mb-1">
+                Usage Data Unavailable
+              </h3>
+              <p className="text-sm text-yellow-700">
+                Unable to load usage meter data. You can still view and manage your subscription.
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-2">
+                <Link href="/subscription">Manage Subscription</Link>
+              </Button>
+            </div>
+          )}
+        </div>
 
         {!linearError && !onboardingError && (
           <div className="border rounded-lg p-6">

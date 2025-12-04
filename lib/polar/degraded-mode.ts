@@ -227,9 +227,10 @@ export async function attemptRecovery(linearOrgId: string): Promise<boolean> {
     });
 
     // Try to fetch customer state from Polar
+    // Note: This may return null if customer doesn't exist, which is fine
     await getCustomerState(linearOrgId);
 
-    // If successful, clear degraded mode flag
+    // If successful (no error thrown), clear degraded mode flag
     await clearDegradedMode(linearOrgId);
 
     logger.info('Successfully recovered from degraded mode', {

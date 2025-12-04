@@ -129,6 +129,28 @@ export async function checkMeterBalance(
     // Get customer state from Polar
     const customerState = await getCustomerState(linearOrgId);
 
+    // If customer doesn't exist in Polar yet, apply free tier limits
+    if (!customerState) {
+      logger.info('Customer not found in Polar, applying free tier limits', {
+        linearOrgId,
+        meterName,
+      });
+
+      const tiers = getTiers();
+      const freeTier = tiers.find((t) => t.id === 'free');
+      const freeLimit =
+        meterName === 'job_descriptions'
+          ? freeTier?.allowances.jobDescriptions ?? 10
+          : freeTier?.allowances.candidateScreenings ?? 50;
+
+      return {
+        allowed: false,
+        balance: 0,
+        limit: freeLimit,
+        unlimited: false,
+      };
+    }
+
     // Find the specific meter by meterId
     // We need to match against the configured meter IDs
     const meterIdToFind =
@@ -349,6 +371,14 @@ export async function getMeterBalances(
 
     // Get customer state from Polar
     const customerState = await getCustomerState(linearOrgId);
+
+    // If customer doesn't exist in Polar yet, return empty balances
+    if (!customerState) {
+      logger.info('Customer not found in Polar, returning empty balances', {
+        linearOrgId,
+      });
+      return [];
+    }
 
     // Map active meters to our format
     const balances: MeterBalance[] = [];

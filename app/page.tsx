@@ -14,10 +14,6 @@ export default async function HomePage() {
   // Retrieves the user from the session or returns `null` if no user is signed in
   const { user } = await withAuth();
 
-  if (user) {
-    redirect("/dashboard");
-  }
-
   // Get the URL to redirect the user to AuthKit to sign up
   const signUpUrl = await getSignUpUrl();
   const signInUrl = await getSignInUrl();
@@ -28,7 +24,12 @@ export default async function HomePage() {
   return (
     <main className='flex flex-col items-center px-6 md:px-0'>
       <Navbar1 auth={
-      {
+      user ? {
+        signup: {
+          title: "Dashboard",
+          url: "/dashboard",
+        }
+      } : {
         login: {
           title: "Sign in",
           url: signInUrl,

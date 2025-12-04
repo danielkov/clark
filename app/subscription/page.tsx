@@ -207,7 +207,7 @@ export default function SubscriptionPage() {
         )}
 
         {/* Current Subscription Status */}
-        {currentSubscription && currentSubscription.status === 'active' && (
+        {currentSubscription && currentSubscription.status === 'active' ? (
           <Card>
             <CardHeader>
               <CardTitle>Current Subscription</CardTitle>
@@ -266,6 +266,18 @@ export default function SubscriptionPage() {
                   )}
                 </Button>
               )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Active Subscription</CardTitle>
+              <CardDescription>Choose a plan below to get started</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                You're currently on the Free tier with limited access. Select a paid plan below to unlock more features and higher usage limits.
+              </p>
             </CardContent>
           </Card>
         )}

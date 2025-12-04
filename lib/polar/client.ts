@@ -9,6 +9,7 @@ import { Polar } from '@polar-sh/sdk';
 import { config } from '../config';
 import { logger } from '../datadog/logger';
 import { withRetry, isRetryableError } from '../utils/retry';
+import { redis } from '../redis';
 
 /**
  * Singleton Polar client instance
@@ -58,8 +59,8 @@ export function resetPolarClient(): void {
  * Requirements: 6.4, 7.1, 7.3
  * 
  * @param linearOrgId - The Linear organization ID (used as external customer ID)
- * @returns Customer state including subscriptions, benefits, and meters
- * @throws Error if API call fails after retries
+ * @returns Customer state including subscriptions, benefits, and meters, or null if customer not found
+ * @throws Error if API call fails after retries (excluding 404 not found)
  */
 export async function getCustomerState(linearOrgId: string) {
   const startTime = Date.now();
@@ -96,9 +97,26 @@ export async function getCustomerState(linearOrgId: string) {
   } catch (error) {
     const latency = Date.now() - startTime;
     
+    // Check if this is a 404 ResourceNotFound error (customer doesn't exist yet)
+    const errorMessage = (error as Error).message || '';
+    const isNotFound = errorMessage.includes('ResourceNotFound') || errorMessage.includes('Not found');
+    
+    if (isNotFound) {
+      logger.info('Customer not found in Polar (not yet created)', {
+        organizationId: linearOrgId,
+        latencyMs: latency,
+        correlationId: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      });
+      
+      // Return null for not found instead of throwing
+      return null;
+    }
+    
+    // For other errors, log as error and throw
     logger.error('Failed to fetch customer state from Polar', error as Error, {
       organizationId: linearOrgId,
       latencyMs: latency,
+      correlationId: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
     });
 
     throw error;
@@ -289,6 +307,118 @@ export async function listProducts(organizationId?: string) {
 }
 
 /**
+ * Get Polar customer ID from Redis or create new customer
+ * Stores customer ID in Redis for future lookups
+ * 
+ * Requirements: 6.1, 7.1
+ * 
+ * @param params - Customer creation parameters
+ * @returns Polar customer ID
+ * @throws Error if customer creation fails
+ */
+export async function ensurePolarCustomer(params: {
+  linearOrgId: string;
+  email: string;
+  name?: string;
+}): Promise<string> {
+  const startTime = Date.now();
+  const redisKey = `polar:customer:${params.linearOrgId}`;
+  
+  try {
+    logger.info('Ensuring Polar customer exists', {
+      organizationId: params.linearOrgId,
+      email: params.email,
+    });
+
+    // Check Redis first for existing customer ID
+    const cachedCustomerId = await redis.get<string>(redisKey);
+    
+    if (cachedCustomerId) {
+      logger.info('Found Polar customer ID in Redis', {
+        organizationId: params.linearOrgId,
+        customerId: cachedCustomerId,
+        latencyMs: Date.now() - startTime,
+      });
+      return cachedCustomerId;
+    }
+
+    // Not in Redis, check if customer exists in Polar by external ID
+    try {
+      const client = getPolarClient();
+      const existingCustomer = await client.customers.getExternal({
+        externalId: params.linearOrgId,
+      });
+      
+      if (existingCustomer && existingCustomer.id) {
+        logger.info('Found existing Polar customer, caching ID', {
+          organizationId: params.linearOrgId,
+          customerId: existingCustomer.id,
+          latencyMs: Date.now() - startTime,
+        });
+        
+        // Cache the customer ID in Redis
+        await redis.set(redisKey, existingCustomer.id);
+        
+        return existingCustomer.id;
+      }
+    } catch (error) {
+      // Customer doesn't exist in Polar (404), continue to create
+      const errorMessage = (error as Error).message || '';
+      if (!errorMessage.includes('ResourceNotFound') && !errorMessage.includes('Not found')) {
+        throw error;
+      }
+      
+      logger.info('Customer not found in Polar, will create new', {
+        organizationId: params.linearOrgId,
+      });
+    }
+
+    // Create new customer in Polar
+    const result = await withRetry(
+      async () => {
+        const client = getPolarClient();
+        return await client.customers.create({
+          email: params.email,
+          name: params.name,
+          externalId: params.linearOrgId,
+          metadata: {
+            linearOrgId: params.linearOrgId,
+            source: 'linear-ats',
+          },
+        } as any);
+      },
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    const latency = Date.now() - startTime;
+    
+    logger.info('Successfully created Polar customer', {
+      organizationId: params.linearOrgId,
+      customerId: result.id,
+      latencyMs: latency,
+    });
+
+    // Cache the new customer ID in Redis
+    await redis.set(redisKey, result.id);
+
+    return result.id;
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    
+    logger.error('Failed to ensure Polar customer', error as Error, {
+      organizationId: params.linearOrgId,
+      latencyMs: latency,
+    });
+
+    throw error;
+  }
+}
+
+/**
  * Create a Polar checkout session for subscription purchase
  * Redirects user to Polar's hosted checkout page
  * 
@@ -313,14 +443,32 @@ export async function createPolarCheckout(params: {
       productPriceId: params.productPriceId,
     });
 
+    // Ensure customer exists and get their Polar customer ID
+    // This links the subscription to the organization, not the individual user
+    let customerId: string | undefined;
+    
+    if (params.customerEmail) {
+      customerId = await ensurePolarCustomer({
+        linearOrgId: params.linearOrgId,
+        email: params.customerEmail,
+        name: params.customerName,
+      });
+      
+      logger.info('Using Polar customer ID for checkout', {
+        organizationId: params.linearOrgId,
+        customerId,
+      });
+    }
+
+    // Create checkout session with customer ID
+    // This ensures the subscription is tied to the organization account
     const result = await withRetry(
       async () => {
         const client = getPolarClient();
         return await client.checkouts.create({
-          productPriceId: params.productPriceId,
+          products: [params.productPriceId],
           successUrl: params.successUrl,
-          customerEmail: params.customerEmail,
-          customerName: params.customerName,
+          customerId: customerId,
           metadata: {
             linearOrgId: params.linearOrgId,
           },
@@ -339,6 +487,7 @@ export async function createPolarCheckout(params: {
       organizationId: params.linearOrgId,
       productPriceId: params.productPriceId,
       checkoutId: result.id,
+      customerId,
       latencyMs: latency,
     });
 
