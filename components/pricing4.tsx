@@ -25,18 +25,21 @@ interface PricingTiers {
     description: string;
     monthlyPrice: string;
     yearlyPrice: string;
+    features: string[];
   };
   pro: {
     name: string;
     description: string;
     monthlyPrice: string;
     yearlyPrice: string;
+    features: string[];
   };
   enterprise: {
     name: string;
     description: string;
     monthlyPrice: string;
     yearlyPrice: string;
+    features: string[];
   };
 }
 
@@ -62,7 +65,7 @@ const Pricing4 = ({
       badge: "Free",
       monthlyPrice: pricingTiers?.free.monthlyPrice || "$0",
       yearlyPrice: pricingTiers?.free.yearlyPrice || "$0",
-      features: [
+      features: pricingTiers?.free.features || [
         "Up to 3 active job listings",
         "AI job description generation",
         "Basic candidate screening",
@@ -76,7 +79,7 @@ const Pricing4 = ({
       badge: "Pro",
       monthlyPrice: pricingTiers?.pro.monthlyPrice || "$99",
       yearlyPrice: pricingTiers?.pro.yearlyPrice || "$999",
-      features: [
+      features: pricingTiers?.pro.features || [
         "Unlimited job listings",
         "Advanced AI screening",
         "Custom tone of voice",
@@ -92,7 +95,7 @@ const Pricing4 = ({
       badge: "Enterprise",
       monthlyPrice: pricingTiers?.enterprise.monthlyPrice || "Custom",
       yearlyPrice: pricingTiers?.enterprise.yearlyPrice || "Custom",
-      features: [
+      features: pricingTiers?.enterprise.features || [
         "Everything in Pro",
         "Dedicated account manager",
         "Custom AI model training",

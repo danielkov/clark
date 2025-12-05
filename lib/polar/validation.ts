@@ -36,10 +36,10 @@ export interface ValidationError {
  * @param subscription - Subscription to validate
  * @returns Validation error if tier doesn't exist, null otherwise
  */
-export function validateTierExists(
+export async function validateTierExists(
   subscription: StoredSubscription
-): ValidationError | null {
-  const tiers = getTiers();
+): Promise<ValidationError | null> {
+  const tiers = await getTiers();
   const tierExists = tiers.some(
     (tier) => tier.polarProductId === subscription.productId
   );
@@ -167,9 +167,9 @@ export function validateMeterBalance(
  * @param subscription - Subscription to validate
  * @returns Validation result with all errors found
  */
-export function validateSubscription(
+export async function validateSubscription(
   subscription: StoredSubscription
-): ValidationResult {
+): Promise<ValidationResult> {
   const errors: ValidationError[] = [];
 
   // Validate required fields
@@ -206,7 +206,7 @@ export function validateSubscription(
   }
 
   // Validate tier exists
-  const tierError = validateTierExists(subscription);
+  const tierError = await validateTierExists(subscription);
   if (tierError) {
     errors.push(tierError);
   }
@@ -310,10 +310,10 @@ export function alertMeterInconsistency(
  * @param subscription - Subscription to validate
  * @returns Validation result
  */
-export function validateAndAlert(
+export async function validateAndAlert(
   subscription: StoredSubscription
-): ValidationResult {
-  const result = validateSubscription(subscription);
+): Promise<ValidationResult> {
+  const result = await validateSubscription(subscription);
 
   if (!result.valid) {
     alertSubscriptionInconsistency(subscription.linearOrgId, result);

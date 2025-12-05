@@ -1,5 +1,4 @@
 import { getSignUpUrl, getSignInUrl, withAuth } from '@workos-inc/authkit-nextjs';
-import { redirect } from 'next/navigation';
 import { Navbar1 } from '@/components/navbar1';
 import { Hero7 } from '@/components/hero7';
 import { Footer2 } from '@/components/footer2';

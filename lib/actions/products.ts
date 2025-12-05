@@ -22,11 +22,12 @@ export interface Product {
   description?: string;
   prices: ProductPrice[];
   isRecurring: boolean;
+  features: string[];
 }
 
 /**
  * Fetch products from Polar for display on the landing page
- * Returns products with their pricing information
+ * Returns products with their pricing information and features from benefits
  */
 export async function fetchProducts(): Promise<Product[]> {
   try {
@@ -40,6 +41,7 @@ export async function fetchProducts(): Promise<Product[]> {
       description: product.description,
       prices: product.prices || [],
       isRecurring: product.isRecurring,
+      features: product.benefits?.map((benefit: any) => benefit.description) || [],
     }));
   } catch (error) {
     console.error('Failed to fetch products:', error);
@@ -71,24 +73,60 @@ export async function getPricingTiers() {
       return `$${(price.priceAmount / 100).toFixed(0)}`;
     };
     
+    // Fallback features if not available from Polar
+    const defaultFreeFeatures = [
+      'Up to 3 active job listings',
+      'AI job description generation',
+      'Basic candidate screening',
+      'Linear integration',
+      'Email support',
+    ];
+    
+    const defaultProFeatures = [
+      'Unlimited job listings',
+      'Advanced AI screening',
+      'Custom tone of voice',
+      'Priority support',
+      'Datadog observability',
+      'Webhook integrations',
+    ];
+    
+    const defaultEnterpriseFeatures = [
+      'Everything in Pro',
+      'Dedicated account manager',
+      'Custom AI model training',
+      'SLA guarantees',
+      'Advanced analytics',
+      'White-label options',
+    ];
+    
     return {
       free: {
         name: freeProduct?.name || 'Starter',
         description: freeProduct?.description || 'Start free and scale as you grow',
         monthlyPrice: '$0',
         yearlyPrice: '$0',
+        features: freeProduct?.features && freeProduct.features.length > 0 
+          ? freeProduct.features 
+          : defaultFreeFeatures,
       },
       pro: {
         name: proProduct?.name || 'Professional',
         description: proProduct?.description || 'For growing teams',
         monthlyPrice: getPrice(proProduct, 'month') || '$99',
         yearlyPrice: getPrice(proProduct, 'year') || '$999',
+        features: proProduct?.features && proProduct.features.length > 0 
+          ? proProduct.features 
+          : defaultProFeatures,
       },
       enterprise: {
         name: enterpriseProduct?.name || 'Enterprise',
         description: enterpriseProduct?.description || 'For large organizations',
         monthlyPrice: getPrice(enterpriseProduct, 'month') || 'Custom',
         yearlyPrice: getPrice(enterpriseProduct, 'year') || 'Custom',
+        features: enterpriseProduct?.features && enterpriseProduct.features.length > 0 
+          ? enterpriseProduct.features 
+          : defaultEnterpriseFeatures,
       },
     };
   } catch (error) {
@@ -100,18 +138,41 @@ export async function getPricingTiers() {
         description: 'Start free and scale as you grow',
         monthlyPrice: '$0',
         yearlyPrice: '$0',
+        features: [
+          'Up to 3 active job listings',
+          'AI job description generation',
+          'Basic candidate screening',
+          'Linear integration',
+          'Email support',
+        ],
       },
       pro: {
         name: 'Professional',
         description: 'For growing teams',
         monthlyPrice: '$49',
         yearlyPrice: '$499',
+        features: [
+          'Unlimited job listings',
+          'Advanced AI screening',
+          'Custom tone of voice',
+          'Priority support',
+          'Datadog observability',
+          'Webhook integrations',
+        ],
       },
       enterprise: {
         name: 'Enterprise',
         description: 'For large organizations',
         monthlyPrice: 'Custom',
         yearlyPrice: 'Custom',
+        features: [
+          'Everything in Pro',
+          'Dedicated account manager',
+          'Custom AI model training',
+          'SLA guarantees',
+          'Advanced analytics',
+          'White-label options',
+        ],
       },
     };
   }

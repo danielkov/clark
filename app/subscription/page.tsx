@@ -30,10 +30,6 @@ interface SubscriptionTier {
   name: string;
   price: number;
   currency: 'usd';
-  allowances: {
-    jobDescriptions: number | null;
-    candidateScreenings: number | null;
-  };
   polarProductId: string;
   description: string;
   features: string[];

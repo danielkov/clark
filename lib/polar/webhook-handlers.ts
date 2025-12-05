@@ -179,7 +179,7 @@ export async function processSubscriptionChange(
 
     // Validate subscription data and alert on inconsistencies
     // Requirements: 9.5
-    validateAndAlert(storedSubscription);
+    await validateAndAlert(storedSubscription);
 
     logger.info('Successfully processed subscription change', {
       subscriptionId: subscription.id,

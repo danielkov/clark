@@ -44,11 +44,11 @@ export interface DegradedModeBalance {
  * 
  * @returns Free tier allowances
  */
-export function getFreeTierLimits(): {
+export async function getFreeTierLimits(): Promise<{
   jobDescriptions: number;
   candidateScreenings: number;
-} {
-  const tiers = getTiers();
+}> {
+  const tiers = await getTiers();
   const freeTier = tiers.find((t) => t.id === 'free');
 
   if (!freeTier) {
@@ -61,8 +61,8 @@ export function getFreeTierLimits(): {
   }
 
   return {
-    jobDescriptions: freeTier.allowances.jobDescriptions ?? 10,
-    candidateScreenings: freeTier.allowances.candidateScreenings ?? 50,
+    jobDescriptions: 1,
+    candidateScreenings: 3,
   };
 }
 
@@ -78,7 +78,7 @@ export async function getDegradedModeState(
 ): Promise<DegradedModeState> {
   try {
     const inDegradedMode = await isDegradedMode(linearOrgId);
-    const freeTierLimits = getFreeTierLimits();
+    const freeTierLimits = await getFreeTierLimits();
 
     if (!inDegradedMode) {
       return {
@@ -105,7 +105,7 @@ export async function getDegradedModeState(
     // Return safe default
     return {
       inDegradedMode: false,
-      freeTierLimits: getFreeTierLimits(),
+      freeTierLimits: await getFreeTierLimits(),
     };
   }
 }
@@ -122,7 +122,7 @@ export async function checkDegradedModeBalance(
   linearOrgId: string,
   meterName: MeterName
 ): Promise<DegradedModeBalance> {
-  const freeTierLimits = getFreeTierLimits();
+  const freeTierLimits = await getFreeTierLimits();
   const limit =
     meterName === 'job_descriptions'
       ? freeTierLimits.jobDescriptions

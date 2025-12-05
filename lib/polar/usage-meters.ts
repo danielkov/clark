@@ -63,7 +63,7 @@ export async function isUnlimitedTier(linearOrgId: string): Promise<boolean> {
     }
 
     // Check if product ID matches Enterprise tier
-    const tiers = getTiers();
+    const tiers = await getTiers();
     const enterpriseTier = tiers.find((t) => t.id === 'enterprise');
 
     if (!enterpriseTier) {
@@ -136,17 +136,10 @@ export async function checkMeterBalance(
         meterName,
       });
 
-      const tiers = getTiers();
-      const freeTier = tiers.find((t) => t.id === 'free');
-      const freeLimit =
-        meterName === 'job_descriptions'
-          ? freeTier?.allowances.jobDescriptions ?? 10
-          : freeTier?.allowances.candidateScreenings ?? 50;
-
       return {
         allowed: false,
         balance: 0,
-        limit: freeLimit,
+        limit: 0,
         unlimited: false,
       };
     }
@@ -170,18 +163,10 @@ export async function checkMeterBalance(
         availableMeters: customerState.activeMeters?.map((m) => m.meterId),
       });
 
-      // If no meter found, apply free tier limits as fallback
-      const tiers = getTiers();
-      const freeTier = tiers.find((t) => t.id === 'free');
-      const freeLimit =
-        meterName === 'job_descriptions'
-          ? freeTier?.allowances.jobDescriptions ?? 10
-          : freeTier?.allowances.candidateScreenings ?? 50;
-
       return {
         allowed: false,
         balance: 0,
-        limit: freeLimit,
+        limit: 0,
         unlimited: false,
       };
     }

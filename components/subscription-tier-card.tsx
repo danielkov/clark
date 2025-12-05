@@ -18,10 +18,6 @@ export interface SubscriptionTierCardProps {
     name: string;
     price: number; // Price in cents
     currency: 'usd';
-    allowances: {
-      jobDescriptions: number | null; // null = unlimited
-      candidateScreenings: number | null; // null = unlimited
-    };
     description: string;
     features: string[];
   };
@@ -66,22 +62,6 @@ export function SubscriptionTierCard({
           {tier.price > 0 && (
             <span className="text-muted-foreground text-sm">/month</span>
           )}
-        </div>
-
-        {/* Allowances */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Job Descriptions</span>
-            <span className="font-medium">
-              {formatAllowance(tier.allowances.jobDescriptions)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Candidate Screenings</span>
-            <span className="font-medium">
-              {formatAllowance(tier.allowances.candidateScreenings)}
-            </span>
-          </div>
         </div>
 
         {/* Features */}
