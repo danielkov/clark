@@ -120,6 +120,7 @@ export interface RejectionEmailParams {
   replyTo?: string;
   inReplyTo?: string;
   references?: string[];
+  idempotencyKey?: string;
 }
 
 /**
@@ -165,6 +166,8 @@ export async function sendRejectionEmail(params: RejectionEmailParams) {
       tags: [
         { name: 'type', value: 'rejection' },
       ],
+    }, {
+      idempotencyKey: params.idempotencyKey,
     });
 
     if (error) {

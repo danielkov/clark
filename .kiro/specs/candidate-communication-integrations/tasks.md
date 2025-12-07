@@ -118,8 +118,8 @@
   - **Property 7: Multiple comment handling**
   - **Validates: Requirements 2.1, 2.2, 2.5**
 
-- [ ] 8. Implement rejection email functionality
-- [ ] 8.1 Update state machine for rejection state
+- [x] 8. Implement rejection email functionality
+- [x] 8.1 Update state machine for rejection state
   - Add rejection state detection to `lib/linear/state-machine.ts`
   - Detect when Issue moves to "Declined" state
   - Check email communication benefit

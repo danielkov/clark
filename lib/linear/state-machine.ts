@@ -15,8 +15,12 @@ import {
 } from './state-management';
 import { checkMeterBalance } from '@/lib/polar/usage-meters';
 import { checkEmailCommunicationBenefit } from '@/lib/polar/benefits';
-import { sendConfirmationEmail } from '@/lib/resend/templates';
-import { generateReplyToAddress } from '@/lib/resend/email-threading';
+import { sendConfirmationEmail, sendRejectionEmail } from '@/lib/resend/templates';
+import { 
+  generateReplyToAddress, 
+  getLastMessageId, 
+  buildThreadReferences 
+} from '@/lib/resend/email-threading';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
 import { Issue, Project } from '@linear/sdk';
@@ -28,6 +32,7 @@ export const STATE_LABELS = {
   NEW: 'New',
   PROCESSED: 'Processed',
   PRE_SCREENED: 'Pre-screened',
+  REJECTION_EMAIL_SENT: 'Rejection-Email-Sent',
 } as const;
 
 /**
@@ -105,6 +110,12 @@ export async function handleIssueUpdate(
   // Transition 1: Processed → Run Screening
   if (stateName === STATE_STATUSES.TODO && labelNames.includes(STATE_LABELS.PROCESSED)) {
     await runScreening(client, issue, project, linearOrgId, linearAccessToken);
+    return;
+  }
+  
+  // Transition 2: Declined → Send Rejection Email (if benefit exists)
+  if (stateName === STATE_STATUSES.DECLINED) {
+    await sendRejectionEmailIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
     return;
   }
 }
@@ -511,6 +522,173 @@ async function runScreening(
         issueId: issue.id,
       });
     }
+  }
+}
+
+/**
+ * Send rejection email if organization has email communication benefit
+ * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+ */
+async function sendRejectionEmailIfEnabled(
+  issue: Issue,
+  project: Project,
+  linearOrgId: string,
+  linearOrgSlug: string,
+  linearAccessToken: string
+): Promise<void> {
+  try {
+    logger.info('Checking email communication benefit for rejection email', { 
+      issueId: issue.id,
+      linearOrgId,
+    });
+    
+    // Check if organization has email communication benefit (Requirement 4.3)
+    const hasEmailBenefit = await checkEmailCommunicationBenefit(linearOrgId);
+    
+    if (!hasEmailBenefit) {
+      logger.info('Organization does not have email communication benefit, skipping rejection email', {
+        issueId: issue.id,
+        linearOrgId,
+      });
+      return;
+    }
+    
+    // Check if rejection email already sent using label (idempotence - Requirement 4.5)
+    const labels = await issue.labels();
+    const labelNames = labels.nodes.map(l => l.name);
+    const rejectionEmailAlreadySent = labelNames.includes(STATE_LABELS.REJECTION_EMAIL_SENT);
+    
+    if (rejectionEmailAlreadySent) {
+      logger.info('Rejection email already sent (label present), skipping duplicate', {
+        issueId: issue.id,
+      });
+      return;
+    }
+    
+    // Extract candidate information from issue description
+    const candidateInfo = extractCandidateInfo(issue.description || '');
+    
+    if (!candidateInfo) {
+      logger.error('Could not extract candidate info from issue, skipping rejection email', undefined, {
+        issueId: issue.id,
+      });
+      return;
+    }
+    
+    // Get position title from project (Requirement 4.4)
+    const positionTitle = project.name || 'Position';
+    
+    // Get organization name from Linear org
+    const team = await issue.team;
+    if (!team) {
+      logger.error('Issue team not found', undefined, { issueId: issue.id });
+      return;
+    }
+    const organization = await team.organization;
+    const organizationName = organization?.name || 'Our Team';
+    
+    // Generate dynamic reply-to address using organization slug
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
+    
+    // Get all comments for threading
+    const issueComments = await issue.comments();
+    const commentBodies = issueComments.nodes.map(c => c.body || '');
+    
+    // Extract threading information from previous comments
+    const lastMessageId = getLastMessageId(commentBodies);
+    const references = buildThreadReferences(commentBodies);
+    
+    logger.info('Sending rejection email', {
+      issueId: issue.id,
+      candidateEmail: candidateInfo.email,
+      candidateName: candidateInfo.name,
+      positionTitle,
+      organizationName,
+      replyToAddress,
+      hasThreading: !!lastMessageId,
+      referencesCount: references.length,
+    });
+    
+    // Send rejection email (Requirement 4.1)
+    // Use issue ID as idempotency key to prevent duplicate sends
+    const idempotencyKey = `rejection-${issue.id}`;
+    
+    try {
+      const emailResult = await sendRejectionEmail({
+        to: candidateInfo.email,
+        candidateName: candidateInfo.name,
+        positionTitle,
+        organizationName,
+        replyTo: replyToAddress,
+        inReplyTo: lastMessageId || undefined,
+        references: references.length > 0 ? references : undefined,
+        idempotencyKey,
+      });
+      
+      logger.info('Rejection email sent successfully', {
+        issueId: issue.id,
+        emailId: emailResult?.id,
+        candidateEmail: candidateInfo.email,
+        idempotencyKey,
+      });
+      
+      // Get the client to add the label
+      const client = createLinearClient(linearAccessToken);
+      
+      // Ensure "Rejection-Email-Sent" label exists
+      const rejectionEmailSentLabelId = await ensureLabel(client, STATE_LABELS.REJECTION_EMAIL_SENT);
+      
+      // Get current labels
+      const currentLabels = await issue.labels();
+      const currentLabelIds = currentLabels.nodes.map(l => l.id);
+      
+      // Add the "Rejection-Email-Sent" label to mark idempotency
+      await client.updateIssue(issue.id, {
+        labelIds: [...currentLabelIds, rejectionEmailSentLabelId],
+      });
+      
+      // Add comment to Linear Issue documenting the rejection email (Requirement 4.2)
+      // Include Message-ID for future threading
+      const messageId = emailResult?.id || 'unknown';
+      const commentBody = `*Rejection email sent to ${candidateInfo.email}*\n\nThis candidate has been notified of the decision.\n\n---\n\nMessage-ID: ${messageId}`;
+      
+      await addIssueComment(
+        linearAccessToken,
+        issue.id,
+        commentBody
+      );
+      
+      logger.info('Added rejection email comment and label to issue', {
+        issueId: issue.id,
+        messageId,
+      });
+    } catch (emailError) {
+      // Handle email sending failures gracefully - log but don't throw
+      logger.error('Failed to send rejection email', emailError instanceof Error ? emailError : new Error(String(emailError)), {
+        issueId: issue.id,
+        candidateEmail: candidateInfo.email,
+        positionTitle,
+      });
+      
+      // Add comment noting the failure
+      try {
+        await addIssueComment(
+          linearAccessToken,
+          issue.id,
+          `*Failed to send rejection email to ${candidateInfo.email}. Error: ${emailError instanceof Error ? emailError.message : 'Unknown error'}*`
+        );
+      } catch (commentError) {
+        logger.error('Failed to add email failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+          issueId: issue.id,
+        });
+      }
+    }
+  } catch (error) {
+    // Log error but don't throw - we don't want to block issue processing
+    logger.error('Error in sendRejectionEmailIfEnabled', error instanceof Error ? error : new Error(String(error)), {
+      issueId: issue.id,
+      linearOrgId,
+    });
   }
 }
 
