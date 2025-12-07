@@ -25,8 +25,8 @@
   - **Property 1: Application confirmation email delivery**
   - **Validates: Requirements 1.1, 1.3**
 
-- [ ] 2. Implement email threading service
-- [ ] 2.1 Create email threading utilities
+- [x] 2. Implement email threading service
+- [x] 2.1 Create email threading utilities
   - Implement `lib/resend/email-threading.ts`
   - Implement `generateReplyToAddress()` to encode org and issue ID
   - Implement `parseReplyToAddress()` to extract metadata
