@@ -65,9 +65,9 @@
   - **Validates: Requirements 9.1, 9.2, 9.3, 9.4**
 
 - [ ] 4. Implement confirmation email on application submission
-- [ ] 4.1 Update application submission flow
-  - Modify `lib/actions/application.ts` to check email communication benefit
-  - Send confirmation email after creating Linear Issue
+- [ ] 4.1 Update state machine to send confirmation email
+  - Modify `lib/linear/state-machine.ts` to check email communication benefit when "New" label is added
+  - Send confirmation email after issue creation
   - Generate dynamic reply-to address with org and issue ID
   - Add comment to Linear Issue documenting email sent with Message-ID
   - Handle email sending failures gracefully
@@ -109,6 +109,7 @@
   - Extract previous Message-ID from last email comment
   - Send comment as email with threading headers
   - Add note to Linear Issue documenting email sent
+  - Update `app/api/webhooks/linear/route.ts` to handle Comment events
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
 - [ ]* 7.2 Write property test for comment-to-email
@@ -118,9 +119,9 @@
   - **Validates: Requirements 2.1, 2.2, 2.5**
 
 - [ ] 8. Implement rejection email functionality
-- [ ] 8.1 Update Linear webhook handler for state changes
-  - Modify `app/api/webhooks/linear/route.ts` to handle Issue state changes
-  - Detect when Issue moves to rejected state
+- [ ] 8.1 Update state machine for rejection state
+  - Add rejection state detection to `lib/linear/state-machine.ts`
+  - Detect when Issue moves to "Declined" state
   - Check email communication benefit
   - Check if rejection email already sent (idempotence)
   - Send rejection email with threading headers
@@ -170,8 +171,8 @@
   - **Validates: Requirements 6.4**
 
 - [ ] 11. Implement screening invitation after pre-screening
-- [ ] 11.1 Update pre-screening flow to send invitations
-  - Modify `lib/linear/pre-screening.ts` to check AI screening benefit
+- [ ] 11.1 Update state machine to send screening invitations
+  - Modify `lib/linear/state-machine.ts` to check AI screening benefit when issue moves to "In Progress" with "Pre-screened" label
   - Generate conversation pointers using Cerebras
   - Create ElevenLabs agent session link with dynamic variables
   - Send screening invitation email with session link

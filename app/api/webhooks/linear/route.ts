@@ -222,9 +222,9 @@ async function handleProjectChange(event: any): Promise<void> {
 }
 
 /**
- * Handle Issue creation events
+ * Handle Issue creation and update events
  */
-async function handleIssueCreation(event: any): Promise<void> {
+async function handleIssueChange(event: any): Promise<void> {
   const issueId = event.data?.id;
   
   if (!issueId) {
@@ -233,16 +233,18 @@ async function handleIssueCreation(event: any): Promise<void> {
   }
 
   const correlationId = generateCorrelationId();
-  const workflowSpan = createSpan('ai_prescreening_workflow', {
-    'workflow.name': 'ai_prescreening',
+  const workflowSpan = createSpan('application_state_machine', {
+    'workflow.name': 'application_state_machine',
     'issue_id': issueId,
     'project_id': event.data?.project?.id,
+    'action': event.action,
     'correlation_id': correlationId,
   });
   
-  logger.info('Issue created', {
+  logger.info('Issue changed', {
     issueId,
     projectId: event.data?.project?.id,
+    action: event.action,
     correlationId,
   });
   
@@ -263,34 +265,25 @@ async function handleIssueCreation(event: any): Promise<void> {
       return;
     }
     
-    // Trigger AI pre-screening
-    const screeningResult = await triggerPreScreening(
+    // Import state machine handler
+    const { handleIssueUpdate } = await import('@/lib/linear/state-machine');
+    
+    // Process state machine transitions
+    await handleIssueUpdate(
       orgConfig.accessToken,
       issueId,
       orgConfig.atsContainerInitiativeId,
       orgConfig.orgId
     );
     
-    if (screeningResult) {
-      workflowSpan.setTag('confidence', screeningResult.confidence);
-      workflowSpan.setTag('recommended_state', screeningResult.recommendedState);
-      logger.info('Pre-screening completed successfully', {
-        issueId,
-        confidence: screeningResult.confidence,
-        recommendedState: screeningResult.recommendedState,
-        correlationId,
-      });
-      workflowSpan.finish();
-    } else {
-      logger.info('Pre-screening was not triggered for Issue', { issueId, correlationId });
-      workflowSpan.finish();
-    }
+    logger.info('State machine processing completed', { issueId, correlationId });
+    workflowSpan.finish();
   } catch (error) {
     // Handle errors gracefully - log and continue
     workflowSpan.setError(error instanceof Error ? error : new Error(String(error)));
     workflowSpan.finish();
-    logger.error('Error during Issue creation handling', error instanceof Error ? error : new Error(String(error)), { issueId, correlationId });
-    // Don't throw - we want the webhook to succeed even if pre-screening fails
+    logger.error('Error during Issue change handling', error instanceof Error ? error : new Error(String(error)), { issueId, correlationId });
+    // Don't throw - we want the webhook to succeed even if state machine fails
   }
 }
 
@@ -309,8 +302,8 @@ async function routeWebhookEvent(event: any): Promise<void> {
       break;
       
     case 'Issue':
-      if (action === 'create') {
-        await handleIssueCreation(event);
+      if (action === 'create' || action === 'update') {
+        await handleIssueChange(event);
       }
       break;
       

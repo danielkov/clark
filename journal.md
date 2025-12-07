@@ -512,3 +512,7 @@ export function getBenefitErrorMessage(
 ```
 
 There's no reason to have this. None of these features are ever on a user-driven path, so these error messages would never be shown. It's also quite possibly the dumbest way to implement this. Looks like someone's first line of JavaScript. I deleted this.
+
+I tried to refactor the issue lifecycle to be a state machine, based on issue state and labels, using vibe code mode. What's interesting is that Kiro spat out 5 new markdown documents, but wrote very little code. These documents do not help the project at all, they're like: REFACTORING_SUMMARY.md, STATE_MACHINE_CHECKLIST.md, EMAIL_STATE_MACHINE.md, SINGLE_UPDATE_PATTERN.md, STATE_MACHINE.md. They all contain roughly the same info: my prompt, inflated with AI slop.
+
+> Does Kiro system prompt have some sort of directive that instructs it if the task is too small to produce a bunch of slop to inflate token usage?

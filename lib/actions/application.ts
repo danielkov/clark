@@ -81,52 +81,9 @@ export async function submitApplication(
       };
     }
 
-    // Check meter balance for candidate screening before processing
-    // Requirements: 8.2 - Block operations when meter is exhausted
-    try {
-      const balanceCheck = await checkMeterBalance(linearOrg, 'candidate_screenings');
-      
-      if (!balanceCheck.allowed && !balanceCheck.unlimited) {
-        logger.warn('Insufficient balance for candidate screening', {
-          linearOrg,
-          balance: balanceCheck.balance,
-          limit: balanceCheck.limit,
-        });
-
-        return {
-          success: false,
-          errors: [{
-            field: 'submit',
-            message: `You have reached your candidate screening limit. Current balance: ${balanceCheck.balance}/${balanceCheck.limit}. Please upgrade your subscription to continue accepting applications.`
-          }]
-        };
-      }
-    } catch (error) {
-      // Log error but continue - we don't want to block applications due to meter check failures
-      logger.error('Failed to check meter balance', error instanceof Error ? error : new Error(String(error)), {
-        linearOrg,
-      });
-    }
-
-    // Parse CV file to extract text content (Requirements: 5.2, 5.3)
-    let parsedCVText: string | undefined;
-    if (cvFile) {
-      try {
-        const cvBuffer = Buffer.from(await cvFile.arrayBuffer());
-        parsedCVText = await parseCV(cvBuffer, cvFile.name);
-      } catch (error) {
-        // Log parsing error but continue with Issue creation
-        // Requirements: Handle parsing errors gracefully
-        logger.error('CV parsing failed', error instanceof Error ? error : new Error(String(error)), {
-          fileName: cvFile.name,
-          fileSize: cvFile.size,
-        });
-        parsedCVText = undefined;
-      }
-    }
-
-    // Create Linear Issue for the candidate
-    // Requirements: 3.3, 3.4, 3.5, 3.6, 5.3
+    // Create Linear Issue for the candidate with "New" label
+    // The state machine will handle processing via webhook events
+    // Requirements: 3.3, 3.4, 3.5, 3.6
     const issue = await createCandidateIssue(
       linearOrg,
       jobId,
@@ -135,8 +92,7 @@ export async function submitApplication(
         email,
         cvFile: cvFile!,
         coverLetterFile,
-      },
-      parsedCVText
+      }
     );
     
     workflowSpan.setTag('issue_id', issue.id);

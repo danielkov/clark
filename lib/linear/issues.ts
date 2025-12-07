@@ -16,7 +16,6 @@ import { withRetry, isRetryableError } from '../utils/retry';
  * @param linearOrg Linear organization name
  * @param projectId Linear Project ID (job listing)
  * @param candidateData Candidate application data
- * @param parsedCVText Optional parsed CV text content to append to Issue description
  * @returns Created Issue
  */
 export async function createCandidateIssue(
@@ -27,8 +26,7 @@ export async function createCandidateIssue(
     email: string;
     cvFile: File;
     coverLetterFile?: File | null;
-  },
-  parsedCVText?: string
+  }
 ): Promise<Issue> {
   // Get the org config from Redis
   const config = await getOrgConfig(linearOrg);
@@ -79,9 +77,24 @@ export async function createCandidateIssue(
     throw new Error('No workflow states found for team');
   }
   
+  // Get or create "New" label
+  const issueLabels = await client.issueLabels();
+  let newLabel = issueLabels.nodes.find((label: any) => label.name === 'New');
+  
+  if (!newLabel) {
+    const createLabelResult = await client.createIssueLabel({
+      name: 'New',
+      color: '#5E6AD2', // Linear purple
+    });
+    
+    if (createLabelResult.success && createLabelResult.issueLabel) {
+      newLabel = await createLabelResult.issueLabel;
+    }
+  }
+  
   // Create the Issue title and description
   const issueTitle = `${candidateData.name} - Application`;
-  let issueDescription = `
+  const issueDescription = `
 # Candidate Application
 
 **Name:** ${candidateData.name}
@@ -92,12 +105,7 @@ export async function createCandidateIssue(
 ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
   `.trim();
   
-  // Append parsed CV text if provided (Requirements: 5.3)
-  if (parsedCVText) {
-    issueDescription += `\n\n---\n\n## CV Content\n\n${parsedCVText}`;
-  }
-  
-  // Create the Issue with retry logic
+  // Create the Issue with retry logic and "New" label
   const issuePayload = await withRetry(
     () => client.createIssue({
       teamId: team.id,
@@ -105,6 +113,7 @@ ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
       description: issueDescription,
       stateId: initialStateId,
       projectId: projectId,
+      labelIds: newLabel ? [newLabel.id] : [],
     }),
     {
       maxAttempts: 3,
