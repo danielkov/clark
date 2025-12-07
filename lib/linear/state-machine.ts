@@ -43,12 +43,19 @@ export const STATE_STATUSES = {
 /**
  * Handle issue update events from Linear webhook
  * Advances the state machine based on current labels and status
+ * 
+ * @param linearAccessToken - Linear API access token
+ * @param issueId - Linear Issue ID
+ * @param atsContainerInitiativeId - ATS Container Initiative ID
+ * @param linearOrgId - Linear organization UUID (for Polar integration)
+ * @param linearOrgSlug - Linear organization slug/urlKey (for Redis and email threading)
  */
 export async function handleIssueUpdate(
   linearAccessToken: string,
   issueId: string,
   atsContainerInitiativeId: string,
-  linearOrgId: string
+  linearOrgId: string,
+  linearOrgSlug: string
 ): Promise<void> {
   const client = createLinearClient(linearAccessToken);
   
@@ -90,7 +97,7 @@ export async function handleIssueUpdate(
   // Transition 0: New → Send Confirmation Email (if benefit exists)
   // This happens before document processing
   if (stateName === STATE_STATUSES.TODO && labelNames.includes(STATE_LABELS.NEW)) {
-    await sendConfirmationEmailIfEnabled(issue, project, linearOrgId, linearAccessToken);
+    await sendConfirmationEmailIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
     await processDocuments(client, issue);
     return;
   }
@@ -110,6 +117,7 @@ async function sendConfirmationEmailIfEnabled(
   issue: Issue,
   project: Project,
   linearOrgId: string,
+  linearOrgSlug: string,
   linearAccessToken: string
 ): Promise<void> {
   try {
@@ -142,7 +150,7 @@ async function sendConfirmationEmailIfEnabled(
     // Get position title from project
     const positionTitle = project.name || 'Position';
     
-    // Get organization name from Linear org
+    // Get organization name and slug from Linear org
     const team = await issue.team;
     if (!team) {
       logger.error('Issue team not found', undefined, { issueId: issue.id });
@@ -151,8 +159,8 @@ async function sendConfirmationEmailIfEnabled(
     const organization = await team.organization;
     const organizationName = organization?.name || 'Our Team';
     
-    // Generate dynamic reply-to address
-    const replyToAddress = generateReplyToAddress(linearOrgId, issue.id);
+    // Generate dynamic reply-to address using organization slug (not ID)
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
     
     logger.info('Sending confirmation email', {
       issueId: issue.id,

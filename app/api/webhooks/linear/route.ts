@@ -250,7 +250,7 @@ async function handleIssueChange(event: any): Promise<void> {
   
   try {
     // Extract organization URL key from webhook event
-    const orgUrlKey = event.url?.split('/')[3];
+    const orgUrlKey: string = event.url?.split('/')[3];
     
     if (!orgUrlKey) {
       logger.error('Could not extract organization URL key from webhook event');
@@ -269,11 +269,13 @@ async function handleIssueChange(event: any): Promise<void> {
     const { handleIssueUpdate } = await import('@/lib/linear/state-machine');
     
     // Process state machine transitions
+    // Pass orgUrlKey (slug) for email threading, orgId (UUID) for Polar integration
     await handleIssueUpdate(
       orgConfig.accessToken,
       issueId,
       orgConfig.atsContainerInitiativeId,
-      orgConfig.orgId
+      orgConfig.orgId,
+      orgUrlKey // Pass the organization slug for email threading
     );
     
     logger.info('State machine processing completed', { issueId, correlationId });
