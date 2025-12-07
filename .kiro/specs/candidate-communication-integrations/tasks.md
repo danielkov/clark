@@ -44,14 +44,14 @@
   - **Property 9: Email content preservation**
   - **Validates: Requirements 3.3**
 
-- [ ] 3. Add benefit check configuration
-- [ ] 3.1 Add benefit IDs to configuration
+- [x] 3. Add benefit check configuration
+- [x] 3.1 Add benefit IDs to configuration
   - Add `POLAR_EMAIL_COMMUNICATION_BENEFIT_ID` to environment variables
   - Add `POLAR_AI_SCREENING_BENEFIT_ID` to environment variables
   - Update `lib/config.ts` with new benefit IDs
   - _Requirements: 9.1, 9.2_
 
-- [ ] 3.2 Create benefit check helper functions
+- [x] 3.2 Create benefit check helper functions
   - Create `lib/polar/benefits.ts` with benefit checking utilities
   - Implement `checkEmailCommunicationBenefit(linearOrgId)`
   - Implement `checkAIScreeningBenefit(linearOrgId)`

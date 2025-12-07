@@ -481,3 +481,34 @@ The implementation is ready to be used by webhook handlers and application submi
 ```
 
 These unit tests are pretty rudimentary. Truly nothing to write home about.
+
+Unfortunately, the streak of bad code by Kiro kept continuing. This is probably caused by Anthropic severely nerfing Sonnet and Haiku over the weekend - probably to incentivise using Opus, which was made available on Claude Code Pro recently.
+
+```
+we already check benefits elsewhere, please research how we do it, before reimplementing logic, e.g.: lib/polar/client.ts has similar functionality. If you create a generic benefit checking function, you should replace previously implemented benefit checking logic with that instead of keeping multiple implementations
+```
+
+It managed to re-use some of the benefit logic, but decided to ignore my other instruction to consolidate the code. Very characteristic of a stunted Claude Haiku.
+
+It also built this monster:
+
+```ts
+/**
+ * Get a descriptive error message for missing benefit
+ * Requirements: 9.4
+ * 
+ * @param benefitType - Type of benefit ('email' or 'ai_screening')
+ * @returns User-friendly error message
+ */
+export function getBenefitErrorMessage(
+  benefitType: 'email' | 'ai_screening'
+): string {
+  if (benefitType === 'email') {
+    return 'Email communication feature is not available for your subscription tier. Please upgrade to access this feature.';
+  } else {
+    return 'AI screening feature is not available for your subscription tier. Please upgrade to access this feature.';
+  }
+}
+```
+
+There's no reason to have this. None of these features are ever on a user-driven path, so these error messages would never be shown. It's also quite possibly the dumbest way to implement this. Looks like someone's first line of JavaScript. I deleted this.
