@@ -101,8 +101,8 @@
 - [ ] 6. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Implement comment-to-email functionality
-- [ ] 7.1 Update Linear webhook handler for comments
+- [x] 7. Implement comment-to-email functionality
+- [x] 7.1 Update Linear webhook handler for comments
   - Modify `app/api/webhooks/linear/route.ts` to handle comment events
   - Implement comment detection (user vs system)
   - Check email communication benefit

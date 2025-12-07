@@ -290,6 +290,81 @@ async function handleIssueChange(event: any): Promise<void> {
 }
 
 /**
+ * Handle Comment creation events
+ * Sends user comments as emails to candidates
+ */
+async function handleCommentCreation(event: any): Promise<void> {
+  const commentId = event.data?.id;
+  const issueId = event.data?.issue?.id;
+  
+  if (!commentId || !issueId) {
+    logger.error('Missing comment ID or issue ID in webhook event', undefined, {
+      commentId,
+      issueId,
+    });
+    return;
+  }
+
+  const correlationId = generateCorrelationId();
+  const workflowSpan = createSpan('comment_to_email', {
+    'workflow.name': 'comment_to_email',
+    'comment_id': commentId,
+    'issue_id': issueId,
+    'action': event.action,
+    'correlation_id': correlationId,
+  });
+  
+  logger.info('Comment created', {
+    commentId,
+    issueId,
+    action: event.action,
+    correlationId,
+  });
+  
+  try {
+    // Extract organization URL key from webhook event
+    const orgUrlKey: string = event.url?.split('/')[3];
+    
+    if (!orgUrlKey) {
+      logger.error('Could not extract organization URL key from webhook event');
+      workflowSpan.finish();
+      return;
+    }
+    
+    // Get organization config from Redis
+    const orgConfig = await getOrgConfig(orgUrlKey);
+    
+    if (!orgConfig) {
+      logger.error('Organization config not found in Redis', undefined, { orgUrlKey });
+      workflowSpan.finish();
+      return;
+    }
+    
+    // Import comment-to-email handler
+    const { handleCommentToEmail } = await import('@/lib/linear/comment-to-email');
+    
+    // Process comment-to-email
+    await handleCommentToEmail(
+      orgConfig.accessToken,
+      commentId,
+      issueId,
+      orgConfig.atsContainerInitiativeId,
+      orgConfig.orgId,
+      orgUrlKey
+    );
+    
+    logger.info('Comment-to-email processing completed', { commentId, issueId, correlationId });
+    workflowSpan.finish();
+  } catch (error) {
+    // Handle errors gracefully - log and continue
+    workflowSpan.setError(error instanceof Error ? error : new Error(String(error)));
+    workflowSpan.finish();
+    logger.error('Error during comment-to-email handling', error instanceof Error ? error : new Error(String(error)), { commentId, issueId, correlationId });
+    // Don't throw - we want the webhook to succeed even if comment-to-email fails
+  }
+}
+
+/**
  * Route webhook events to appropriate handlers
  */
 async function routeWebhookEvent(event: any): Promise<void> {
@@ -306,6 +381,12 @@ async function routeWebhookEvent(event: any): Promise<void> {
     case 'Issue':
       if (action === 'create' || action === 'update') {
         await handleIssueChange(event);
+      }
+      break;
+      
+    case 'Comment':
+      if (action === 'create') {
+        await handleCommentCreation(event);
       }
       break;
       
