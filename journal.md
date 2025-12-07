@@ -450,3 +450,19 @@ Overall, this is by far the best plan it produced out of all my attempts. Looks 
 Credits used: 10.84
 Elapsed time: 49m 43s
 ```
+
+Despite being instructed explicitly, to use Resend's email template feature and having examples in design.md and clear instructions in tasks.md, Kiro still re-rolled email templating from scratch, using string templates. It also hallucinated the wrong implementation using:
+
+```ts
+const { data, error } = await resend.emails.send({
+  from: config.resend.fromEmail,
+  to: params.to,
+  subject: params.subject,
+  react: params.template as any, // Resend SDK expects 'react' for templates
+  replyTo: params.replyTo,
+  headers: params.headers,
+  tags: params.tags,
+});
+```
+
+This wouldn't even work, since it neglected to use the right params (Resend works with `react-email`). I ended up having to manually implement templating. This is a fairly new feature, but it is well-documented both online and on Context7. Even after multiple tool calls, where the content was right, it seemed like whatever model Kiro was using at the time simply ignored its context and just wrote whatever code it had in its training data instead. This makes me regret spending so much time on planning, since I had to hand-code the majority of the feature anyway.

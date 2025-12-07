@@ -40,6 +40,20 @@ export const config = {
     },
     benefits: {
       customToneOfVoice: process.env.POLAR_CUSTOM_TONE_OF_VOICE_BENEFIT_ID || '',
+      emailCommunication: process.env.POLAR_EMAIL_COMMUNICATION_BENEFIT_ID || '',
+      aiScreening: process.env.POLAR_AI_SCREENING_BENEFIT_ID || '',
+    },
+  },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || '',
+    fromEmail: process.env.RESEND_FROM_EMAIL || '',
+    replyDomain: process.env.RESEND_REPLY_DOMAIN || '',
+    webhookSecret: process.env.RESEND_WEBHOOK_SECRET || '',
+    templates: {
+      confirmation: process.env.RESEND_TEMPLATE_CONFIRMATION || '',
+      rejection: process.env.RESEND_TEMPLATE_REJECTION || '',
+      screeningInvitation: process.env.RESEND_TEMPLATE_SCREENING_INVITATION || '',
+      comment: process.env.RESEND_TEMPLATE_COMMENT || '',
     },
   },
   app: {
