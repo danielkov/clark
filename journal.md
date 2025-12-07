@@ -410,3 +410,43 @@ In application form you added an new bit of logic where we show usage limit warn
 Although it reverted the changes in the file, I wanted to see if it would go off to check if similar errors in logic. This is something Claude Code likes to do, but Kiro didn't.
 
 A new behaviour I hadn't seen Kiro do before, is it left a `task-19-implementation-notes.md` file. Makes no sense why it did this. I'll leave this in. It includes the issue I described above.
+
+## ElevenLabs integration and emails via Resend
+
+Initially I wanted to add these two features separately, but based on past experience, both features would've been "too small" for Kiro and I felt I'd risk it overengineering both, so I decided to implement both in one go.
+
+Trick: I removed the final requirement (security: webhook validation) from `requirements.md`. It's very likely that validation is built into how these two dependencies integrate and if not, I can always add this later. Kiro wasted 60+ credits on adding its own webhook validation logic on top of the already built-in validation logic of Polar SDK last time.
+
+Another trick: Kiro loves layering interfaces on top of interfaces on top of SDKs. This creates code that's very brittle and difficult to re-use, because the implementors have to know about which Kiro-induced layer they're interacting with as opposed to just using the SDK directly. I instructed Kiro to update the design:
+
+```
+You re-implemented a lot of features that already exist in resend and elevenlabs sdks. Use context7 to research these SDKs and use their interfaces as examples instead of creating new ones.
+```
+
+It cleared up a lot of the slop it added to `design.md`, but crucially it left in a recently-added Resend feature: email <-> template mapping. I added this prompt to clear it up:
+
+```
+No need for your email template mapping implementation. Resend has this feature built in:
+
+https://resend.com/docs/dashboard/templates/introduction
+```
+
+It refused to fetch the URL (even though `fetch` tool is enabled). To the surprise of absolutely no one: it hallucinated the dumbest interface for templates I've ever seen. I intructed it more sternly to fetch the URL to get the actual interface right.
+
+There's a technique to achieve fully email header-based threading. Kiro didn't reach for this solution, and instead opted for a mapping layer implemented in our own database. The reason I prefer the header-based approach is that it's stateless. If our DB goes down or there's a temporary outage when the replies are sent, I don't have to worry about orphan email chains.
+
+I pulled up Gemini 2.5 Pro and asked it to give a simple and concise explanation of how to achieve this. I then pasted this in Kiro along with my own instructions to iterate on the design. This is the longest time I've spent iterating on the design so far. I want to see how it affects the plan.
+
+A workflow that could work way better is similar to how Claude Code planning works. It collaborates with you, by presenting you with decisions for each milestone it considers important. E.g.: for this project, the right workflow would've looked something like this:
+
+1. **Reseach upfront**: without me prompting it to. Use the internet, use Context7, or whatever tools it has access to to get a better picture of the interconnected parts.
+2. **Disambiguate interactively**: ask me questions where it makes sense, e.g.: "do you want to use the database to map email threads to responses or should I plan for a stateless solution using email headers?"
+3. **Create a rough outline**: Kiro design documents are massive. I often just skim the headings, because it's just a lot of text to get through. I wish there was an outline I could approve first, before it sloppifies it.
+4. **Build design from approved outline**: this would reduce overall credit usage. Whether it's to the benefit of Amazon or not, is a different question, but it would definitely benefit users.
+
+Overall, this is by far the best plan it produced out of all my attempts. Looks like it's worth spending quite a bit of time in the design phase.
+
+```
+Credits used: 10.84
+Elapsed time: 49m 43s
+```
