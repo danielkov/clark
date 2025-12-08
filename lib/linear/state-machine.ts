@@ -22,7 +22,7 @@ import {
   buildThreadReferences 
 } from '@/lib/resend/email-threading';
 import { generateConversationPointers } from '@/lib/cerebras/conversation-pointers';
-import { createAgentSessionLink } from '@/lib/elevenlabs/client';
+import { createScreeningSession } from '@/lib/elevenlabs/session-secrets';
 import { config } from '@/lib/config';
 import { redis } from '@/lib/redis';
 import { withRetry, isRetryableError } from '../utils/retry';
@@ -837,36 +837,38 @@ async function sendScreeningInvitationIfEnabled(
       return;
     }
     
-    logger.info('Creating ElevenLabs agent session link', {
+    logger.info('Creating secure screening session', {
       issueId: issue.id,
-      agentId: config.elevenlabs.agentId,
       candidateName: candidateFirstName,
       organizationName,
     });
     
-    // Create ElevenLabs agent session link with dynamic variables (Requirements 6.1-6.5)
-    let sessionLink: string;
+    // Create secure screening session with secret (Requirements 6.1-6.5)
+    let secret: string;
     try {
-      sessionLink = await createAgentSessionLink(
-        config.elevenlabs.agentId,
-        {
-          company_name: organizationName,
-          candidate_name: candidateFirstName,
-          job_description: jobDescription,
-          job_application: candidateApplication,
-          conversation_pointers: conversationPointers,
-        }
-      );
-      
-      logger.info('ElevenLabs agent session link created successfully', {
+      secret = await createScreeningSession({
+        linearOrg: linearOrgSlug,
         issueId: issue.id,
-        sessionLink: sessionLink.substring(0, 100), // Log first 100 chars
+        candidateName: candidateInfo.name,
+        candidateEmail: candidateInfo.email,
+        companyName: organizationName,
+        jobDescription,
+        candidateApplication,
+        conversationPointers,
+      });
+      
+      // Construct the interview URL
+      const sessionLink = `${config.app.url}/interview/${secret}`;
+      
+      logger.info('Screening session created successfully', {
+        issueId: issue.id,
+        secret: secret.substring(0, 8) + '...',
+        sessionLink,
       });
     } catch (sessionError) {
       // Log error and notify administrators (Requirement 5.5)
-      logger.error('Failed to create ElevenLabs agent session link', sessionError instanceof Error ? sessionError : new Error(String(sessionError)), {
+      logger.error('Failed to create screening session', sessionError instanceof Error ? sessionError : new Error(String(sessionError)), {
         issueId: issue.id,
-        agentId: config.elevenlabs.agentId,
       });
       
       // Add comment noting the failure
@@ -874,16 +876,19 @@ async function sendScreeningInvitationIfEnabled(
         await addIssueComment(
           linearAccessToken,
           issue.id,
-          `*Failed to create AI screening session link. Error: ${sessionError instanceof Error ? sessionError.message : 'Unknown error'}*`
+          `*Failed to create AI screening session. Error: ${sessionError instanceof Error ? sessionError.message : 'Unknown error'}*`
         );
       } catch (commentError) {
-        logger.error('Failed to add session link failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+        logger.error('Failed to add session creation failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
           issueId: issue.id,
         });
       }
       
       return;
     }
+    
+    // Construct the interview URL
+    const sessionLink = `${config.app.url}/interview/${secret}`;
     
     // Generate dynamic reply-to address using organization slug
     const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
@@ -924,32 +929,7 @@ async function sendScreeningInvitationIfEnabled(
         issueId: issue.id,
         emailId: emailResult?.id,
         candidateEmail: candidateInfo.email,
-      });
-      
-      // Generate a unique session ID for Redis storage
-      const sessionId = `${linearOrgSlug}-${issue.id}-${Date.now()}`;
-      
-      // Store session metadata in Redis
-      const sessionData = {
-        issueId: issue.id,
-        candidateEmail: candidateInfo.email,
-        candidateName: candidateInfo.name,
-        linearOrg: linearOrgSlug,
-        projectId: project.id,
-        jobDescription,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-      };
-      
-      const redisKey = `screening:session:${sessionId}`;
-      await redis.set(redisKey, sessionData, {
-        ex: 7 * 24 * 60 * 60, // 7 days in seconds
-      });
-      
-      logger.info('Stored screening session metadata in Redis', {
-        issueId: issue.id,
-        sessionId,
-        redisKey,
+        secret: secret.substring(0, 8) + '...',
       });
       
       // Get the client to add the label
@@ -970,7 +950,7 @@ async function sendScreeningInvitationIfEnabled(
       // Add comment to Linear Issue documenting the invitation (Requirement 5.2)
       // Include Message-ID for future threading
       const messageId = emailResult?.id || 'unknown';
-      const commentBody = `*AI Screening invitation sent to ${candidateInfo.email}*\n\nThe candidate has been invited to complete an AI-powered screening interview.\n\nSession ID: ${sessionId}\n\n---\n\nMessage-ID: ${messageId}`;
+      const commentBody = `*AI Screening invitation sent to ${candidateInfo.email}*\n\nThe candidate has been invited to complete an AI-powered screening interview.\n\nSecret: ${secret.substring(0, 8)}...\n\n---\n\nMessage-ID: ${messageId}`;
       
       await addIssueComment(
         linearAccessToken,
@@ -981,7 +961,7 @@ async function sendScreeningInvitationIfEnabled(
       logger.info('Added screening invitation comment and label to issue', {
         issueId: issue.id,
         messageId,
-        sessionId,
+        secret: secret.substring(0, 8) + '...',
       });
     } catch (emailError) {
       // Handle email sending failures gracefully - log but don't throw

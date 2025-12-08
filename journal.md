@@ -556,3 +556,28 @@ const currentLabelIds = labels.nodes
 ```
 
 Fixing these uncovered some issues, mainly Kiro not handling optional return types, where `team` could be `undefined`. I fixed these by hand.
+
+## Screening interview session
+
+Kiro implemented this in a very flawed way again. It used a probabilistic time-based matching algorithm, which meant that if a user starts a session and while they're talking to the screening agent, another user starts another session, it would then associate user 1's results with user 2. This is a huge flaw. What makes this especially horrible is that if I didn't review the code and just tried it outright, I wouldn't have been able to tell that this failure mode exists.
+
+This is also by far the most expensive part of this project. Each call costs cold hard cash. This is something that must work well. Used vibe coding to try to fix it.
+
+It hallucinated the large part of the solution, even though I literally copy/pasted what to do from Gemini. I had to hand-implement this. It was all using existing SDK calls too, from parts of the SDK we're already using for other requests. Kiro even left a comment explaining that this method is not part of the SDK yet. This of course, was false. It also spat out 5 new markdown files, most of which just duplicated the same content. Again, this seems like something it started doing today. Wish I could just turn this off.
+
+It also hadn't completed the solution and just left a massive TODO:
+
+```ts
+// TODO: Initialize ElevenLabs conversation with @11labs/react
+// This will be implemented after installing the package
+```
+
+Why it wouldn't just install the package is puzzling or why it needed it for an implementation when it can use the internet or Context7 is another issue. I don't think I'll be using Kiro for anything serious. It just lacks the mechanisms for actual real-life software development. For non-developers, it's scary how many critical flaws it created, even despite all the illusionary safety harnesses. For software engineers, there's just too many more competitive options
+
+I counted the tokens in one of the random slop files it spat out:
+
+```
+2060 tokens 8243 characters 965 words
+```
+
+Comical.

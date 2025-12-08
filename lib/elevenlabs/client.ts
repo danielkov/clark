@@ -44,101 +44,34 @@ export async function getAgent(agentId: string) {
 }
 
 /**
- * Create a public talk-to page URL with dynamic variables
+ * Create a signed URL for an ElevenLabs agent session
  * 
- * ElevenLabs supports passing variables via base64-encoded JSON in the 'vars' parameter.
- * Variables are defined in the agent's configuration using double curly braces {{variable_name}}
- * and are automatically replaced when the conversation starts.
- * 
- * Requirements: 5.5, 6.1, 6.2, 6.3, 6.4, 6.5
+ * This creates a secure, time-limited signed URL that can be used to start
+ * a conversation with the agent. The signed URL is used client-side with
+ * the @11labs/react library.
  * 
  * @param agentId - The ElevenLabs agent ID
- * @param variables - Dynamic variables to pass to the agent
- * @returns Public URL for the agent session
- * @throws Error if validation fails or URL generation fails
+ * @returns Signed URL response
+ * @throws Error if API call fails
  */
-export async function createAgentSessionLink(
-  agentId: string,
-  variables: AgentSessionVariables
-): Promise<string> {
-  const startTime = Date.now();
-  
+export async function createSignedUrl(agentId: string): Promise<string> {
   try {
-    // Validate agent ID
     if (!agentId || agentId.trim() === '') {
       throw new Error('Agent ID is required and cannot be empty');
     }
 
-    // Validate that all required variables are provided
-    const requiredVars: (keyof AgentSessionVariables)[] = [
-      'company_name',
-      'candidate_name',
-      'job_description',
-      'job_application',
-      'conversation_pointers',
-    ];
+    const response = await elevenlabs.conversationalAi.conversations.getSignedUrl({ agentId });
 
-    const missingVars = requiredVars.filter(
-      (key) => !variables[key] || variables[key].trim() === ''
-    );
-
-    if (missingVars.length > 0) {
-      const error = new Error(
-        `Missing required variables: ${missingVars.join(', ')}`
-      );
-      logger.error('Session link validation failed', error, {
-        agentId,
-        missingVars,
-        providedVars: Object.keys(variables).filter(key => variables[key as keyof AgentSessionVariables]),
-      });
-      throw error;
-    }
-
-    // Validate variable content lengths to prevent URL length issues
-    const maxVarLength = 10000; // Reasonable limit for URL parameters
-    const oversizedVars = requiredVars.filter(
-      (key) => variables[key].length > maxVarLength
-    );
-
-    if (oversizedVars.length > 0) {
-      logger.warn('Some variables exceed recommended length', {
-        agentId,
-        oversizedVars: oversizedVars.map(key => ({
-          name: key,
-          length: variables[key].length,
-        })),
-      });
-    }
-
-    // Encode variables as base64 JSON
-    const encodedVars = Buffer.from(JSON.stringify(variables)).toString('base64');
-    
-    // Construct the public talk-to page URL
-    const url = `https://elevenlabs.io/app/talk-to?agent_id=${agentId}&vars=${encodedVars}`;
-    
-    const duration = Date.now() - startTime;
-    
-    logger.info('Created ElevenLabs agent session link successfully', {
-      agentId,
-      candidateName: variables.candidate_name,
-      companyName: variables.company_name,
-      urlLength: url.length,
-      duration,
-    });
-
-    return url;
+    return response.signedUrl;
   } catch (error) {
-    const duration = Date.now() - startTime;
     const err = error instanceof Error ? error : new Error(String(error));
     
-    logger.error('Failed to create agent session link', err, {
+    logger.error('Failed to create signed URL', err, {
       agentId,
-      candidateName: variables?.candidate_name,
       errorType: err.name,
-      duration,
     });
     
-    throw new Error(`Failed to create session link: ${err.message}`);
+    throw new Error(`Failed to create signed URL: ${err.message}`);
   }
 }
 

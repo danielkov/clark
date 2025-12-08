@@ -14,27 +14,14 @@ import {
   formatTranscript,
   ElevenLabsWebhookEvent 
 } from '@/lib/elevenlabs/client';
+import { getScreeningSessionByConversationId, ScreeningSessionData } from '@/lib/elevenlabs/session-secrets';
 import { evaluateTranscript } from '@/lib/cerebras/transcript-evaluation';
 import { createLinearClient } from '@/lib/linear/client';
 import { addIssueComment } from '@/lib/linear/state-management';
-import { getOrgConfig, redis } from '@/lib/redis';
+import { getOrgConfig } from '@/lib/redis';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/datadog/logger';
 import { withRetry, isRetryableError } from '@/lib/utils/retry';
-
-/**
- * Screening session metadata stored in Redis
- */
-interface ScreeningSessionData {
-  issueId: string;
-  candidateEmail: string;
-  candidateName: string;
-  linearOrg: string;
-  projectId: string;
-  jobDescription: string;
-  createdAt: string;
-  expiresAt: string;
-}
 
 /**
  * POST /api/webhooks/elevenlabs
@@ -200,41 +187,14 @@ async function handleConversationCompleted(
     messageCount: transcript.length,
   });
   
-  // Retrieve session metadata from Redis (Requirement 7.1)
-  // Search for active screening sessions
-  // Note: ElevenLabs doesn't provide a direct way to pass session metadata back in webhooks
-  // We match based on timing - find the most recent session that hasn't been processed
-  const sessionKeys = await redis.keys('screening:session:*');
+  // Retrieve session metadata from Redis using conversation ID (Requirement 7.1)
+  const sessionData = await getScreeningSessionByConversationId(conversationId);
   
-  let sessionData: ScreeningSessionData | null = null;
-  let sessionKey: string | null = null;
-  let mostRecentTimestamp = 0;
-  
-  // Search through sessions to find the most recent one
-  // This works because sessions are created just before the invitation is sent
-  // and the webhook arrives shortly after the conversation completes
-  for (const key of sessionKeys) {
-    const data = await redis.get<ScreeningSessionData>(key);
-    if (data) {
-      // Extract timestamp from session ID (format: {org}-{issueId}-{timestamp})
-      const sessionId = key.replace('screening:session:', '');
-      const parts = sessionId.split('-');
-      const timestamp = parseInt(parts[parts.length - 1], 10);
-      
-      if (!isNaN(timestamp) && timestamp > mostRecentTimestamp) {
-        mostRecentTimestamp = timestamp;
-        sessionData = data;
-        sessionKey = key;
-      }
-    }
-  }
-  
-  if (!sessionData || !sessionKey) {
+  if (!sessionData) {
     // Orphaned transcript - log and notify (Requirement 8.5)
-    logger.error('Orphaned transcript: no matching session found in Redis', undefined, {
+    logger.error('Orphaned transcript: no matching session found for conversation ID', undefined, {
       conversationId,
       agentId: event.data.agent_id,
-      searchedKeys: sessionKeys.length,
     });
     
     // TODO: Notify administrators about orphaned transcript
@@ -249,7 +209,6 @@ async function handleConversationCompleted(
   
   logger.info('Retrieved session metadata from Redis', {
     conversationId,
-    sessionKey,
     issueId: sessionData.issueId,
     linearOrg: sessionData.linearOrg,
   });
@@ -323,8 +282,8 @@ async function handleConversationCompleted(
     orgConfig.accessToken
   );
   
-  // Clean up session from Redis
-  await redis.del(sessionKey);
+  // Note: Session cleanup is handled automatically by Redis TTL
+  // The session will expire after 7 days
   
   logger.info('Conversation completed processing finished', {
     conversationId,
