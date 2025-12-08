@@ -273,7 +273,7 @@ export default async function DashboardPage() {
         {!linearError && !onboardingError && (
           <div className="border rounded-lg p-6">
             <p className="text-muted-foreground">
-              Hiring Team is ready to use. Start creating job descriptions and
+              Clark is ready to use. Start creating job descriptions and
               managing candidates.
             </p>
           </div>

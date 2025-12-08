@@ -27,8 +27,8 @@ interface Footer2Props {
 const Footer2 = ({
   logo = {
     src: "/ht_logo_nobg.png",
-    alt: "Hiring Team Logo",
-    title: "Hiring Team",
+    alt: "Clark Logo",
+    title: "Clark",
     url: "/",
   },
   tagline = "Hiring made simple with AI.",
@@ -68,7 +68,7 @@ const Footer2 = ({
       ],
     },
   ],
-  copyright = `© ${new Date().getFullYear()} Hiring Team. All rights reserved.`,
+  copyright = `© ${new Date().getFullYear()} Clark. All rights reserved.`,
   bottomLinks = [
     { text: "Terms of Service", url: "#" },
     { text: "Privacy Policy", url: "#" },

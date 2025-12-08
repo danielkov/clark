@@ -60,8 +60,8 @@ const Navbar1 = ({
   logo = {
     url: "/",
     src: "/ht_logo_nobg.png",
-    alt: "Hiring Team Logo",
-    title: "Hiring Team",
+    alt: "Clark Logo",
+    title: "Clark",
   },
   menu = [
     { title: "Features", url: "#features" },

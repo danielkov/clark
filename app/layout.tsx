@@ -4,7 +4,7 @@ import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: 'Hiring Team',
+  title: 'Clark',
   description: 'Applicant Tracking System integrated with Linear',
 };
 

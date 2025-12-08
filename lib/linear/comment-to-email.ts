@@ -23,7 +23,7 @@ import { logger } from '@/lib/datadog/logger';
  * Check if a comment is a system message
  * 
  * System messages are identified by:
- * - Comments created by the bot user ("Hiring Team (bot)")
+ * - Comments created by the bot user ("Clark (bot)")
  * - Comments containing system metadata (Message-ID footer)
  * - Comments with system formatting (starting with *)
  * 

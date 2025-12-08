@@ -133,7 +133,7 @@ ${candidateData.coverLetterFile ? '- Cover Letter: Attached' : ''}
     await client.createComment({
       issueId: issue.id,
       body: `*This candidate was automatically added via the ATS application form.*`,
-      createAsUser: "Hiring Team (bot)",
+      createAsUser: "Clark (bot)",
     });
   } catch (error) {
     // this step is optional, but log error

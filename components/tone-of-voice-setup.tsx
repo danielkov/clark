@@ -39,7 +39,7 @@ export function ToneOfVoiceSetup() {
           Tone of Voice Document Missing
         </h3>
         <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-1">
-          Hiring Team needs a Tone of Voice document to guide job description creation.
+          Clark needs a Tone of Voice document to guide job description creation.
         </p>
       </div>
       
