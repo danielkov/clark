@@ -146,6 +146,7 @@ async function sendConfirmationEmailIfEnabled(
     logger.info('Checking email communication benefit for confirmation email', { 
       issueId: issue.id,
       linearOrgId,
+      linearOrgSlug,
     });
     
     // Check if organization has email communication benefit
@@ -155,6 +156,7 @@ async function sendConfirmationEmailIfEnabled(
       logger.info('Organization does not have email communication benefit, skipping confirmation email', {
         issueId: issue.id,
         linearOrgId,
+        linearOrgSlug,
       });
       return;
     }

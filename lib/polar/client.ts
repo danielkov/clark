@@ -73,9 +73,9 @@ export async function getCustomerState(linearOrgId: string) {
     const result = await withRetry(
       async () => {
         const client = getPolarClient();
-        return await client.customers.getState({
-          id: linearOrgId,
-        });
+        return await client.customers.getStateExternal({
+          externalId: linearOrgId,
+        })
       },
       {
         maxAttempts: 3,
