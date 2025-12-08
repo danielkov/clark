@@ -39,5 +39,13 @@ export default async function proxy(request: NextRequest, event: NextFetchEvent)
 // Match against pages that require authentication
 // Leave this out if you want authentication on every page in your application
 export const config = { 
-  matcher: ['/', '/dashboard/:path*', '/onboarding/:path*', '/api/:path*', '/jobs/:path*', '/subscription/:path*']
+  matcher: [
+    '/',
+    '/dashboard/:path*',
+    '/onboarding/:path*',
+    // Match API routes, EXCEPT the webhook route
+    '/api/((?!webhooks).*)', // Matches /api/users, /api/auth, etc., but NOT /api/webhooks
+    '/jobs/:path*',
+    '/subscription/:path*',
+  ]
 };
