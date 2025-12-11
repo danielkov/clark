@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookSignature } from '@/lib/resend/client';
+import { getResendClient, verifyWebhookSignature } from '@/lib/resend/client';
 import { 
   parseReplyToAddress, 
   cleanEmailContent, 
@@ -20,6 +20,7 @@ import { config } from '@/lib/config';
 import { logger, generateCorrelationId } from '@/lib/datadog/logger';
 import { emitSecurityEvent, emitWebhookFailure } from '@/lib/datadog/events';
 import { trackWebhookProcessing, createSpan } from '@/lib/datadog/metrics';
+import { isRetryableError, withRetry } from '@/lib/utils/retry';
 
 /**
  * Resend webhook event types
@@ -48,23 +49,32 @@ interface ResendWebhookEvent {
  * Resend inbound email event
  * This is sent when a candidate replies to an email
  */
-interface ResendInboundEmailEvent {
-  type: 'email.received';
-  created_at: string;
-  data: {
-    from: string;
-    to: string;
-    subject: string;
-    html?: string;
-    text?: string;
-    headers?: Record<string, string>;
-    attachments?: Array<{
-      filename: string;
-      content: string;
-      contentType: string;
-    }>;
-  };
+export interface ResendInboundWebhookAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  content_disposition: string;
+  content_id?: string;
 }
+
+export interface ResendInboundWebhookData {
+  email_id: string;
+  created_at: string;
+  from: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  message_id?: string;
+  subject: string | null;
+  attachments: ResendInboundWebhookAttachment[];
+}
+
+export interface ResendInboundEmailEvent {
+  type: "email.received";
+  created_at: string;
+  data: ResendInboundWebhookData;
+}
+
 
 /**
  * Handle email.received event (candidate reply)
@@ -94,8 +104,29 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     return;
   }
   
+  const ourReplyAddress = toAddress.find((address) => address.includes(config.resend.replyDomain));
+  if (!ourReplyAddress) {
+    logger.error('Failed to find our reply address', undefined, {
+      toAddress,
+      from: data.from,
+      subject: data.subject,
+      correlationId,
+    });
+
+    emitWebhookFailure(
+      'resend:reply_not_found',
+      new Error('Cannot match email to Linear Issue'),
+      {
+        toAddress,
+        from: data.from,
+        correlationId,
+      }
+    );
+    
+    return;
+  }
   // Parse the "to" address to extract Linear org and issue ID
-  const parsed = parseReplyToAddress(toAddress);
+  const parsed = parseReplyToAddress(ourReplyAddress);
   
   if (!parsed) {
     // This is an orphaned email - cannot match to a Linear Issue
@@ -208,9 +239,32 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     // Return 500 for retry
     throw error;
   }
-  
-  // Extract email content (prefer text over html)
-  const rawContent = data.text || data.html || '';
+
+  let rawContent;
+  try {
+    const client = getResendClient();
+    const { data: email } = await withRetry(
+      () => client.emails.receiving.get(event.data.email_id),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+    
+    if (!email) {
+      throw new Error('Email not found');
+    }
+
+    rawContent = email?.text;
+  } catch (error) {
+    logger.error('Error reading received email', error as Error, {
+      issueId: issue.id,
+      from: data.from,
+      correlationId,
+    });
+    return;
+  }
   
   if (!rawContent) {
     logger.warn('Email has no content', {
