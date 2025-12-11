@@ -20,7 +20,7 @@ import { config } from '@/lib/config';
 import { logger, generateCorrelationId } from '@/lib/datadog/logger';
 import { emitSecurityEvent, emitWebhookFailure } from '@/lib/datadog/events';
 import { trackWebhookProcessing, createSpan } from '@/lib/datadog/metrics';
-import { isRetryableError, withRetry } from '@/lib/utils/retry';
+import { withRetry } from '@/lib/utils/retry';
 
 /**
  * Resend webhook event types
@@ -243,16 +243,22 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
   let rawContent;
   try {
     const client = getResendClient();
-    const { data: email } = await withRetry(
-      () => client.emails.receiving.get(event.data.email_id),
+    const data = await withRetry(
+      () => client.emails.receiving.get(event.data.email_id).then(({ data, error }) => {
+        if (error) {
+          throw error;
+        }
+        return data;
+      }),
       {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        shouldRetry: isRetryableError,
+        // Resend emails might take a while to process, so we keep trying
+        maxAttempts: 10,
+        initialDelayMs: 500,
+        shouldRetry: () => true,
       }
     );
     
-    if (!email) {
+    if (!data) {
       logger.error('Email not found', undefined, {
         id: event.data.email_id,
         data: event.data,
@@ -260,7 +266,7 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
       throw new Error('Email not found');
     }
 
-    rawContent = email?.text;
+    rawContent = data?.text;
   } catch (error) {
     logger.error('Error reading received email', error as Error, {
       issueId: issue.id,
