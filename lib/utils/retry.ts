@@ -122,7 +122,10 @@ export function isRetryableError(error: unknown): boolean {
     if (
       message.includes('validation') ||
       message.includes('invalid input') ||
-      message.includes('bad request')
+      message.includes('bad request') ||
+      message.includes('argument validation error') ||
+      message.includes('missing required') ||
+      message.includes('not found')
     ) {
       return false;
     }

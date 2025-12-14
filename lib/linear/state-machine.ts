@@ -50,31 +50,39 @@ export const STATE_STATUSES = {
   DECLINED: 'Declined',
 } as const;
 
-const STATE_STATUS_DETAILS = {
-  TODO: {
-    color: "blue",
+/**
+ * State status details keyed by display name
+ * Contains all necessary information to create states on-demand
+ */
+const STATE_STATUS_DETAILS: Record<string, {
+  color: string;
+  type: "unstarted" | "started" | "completed" | "canceled";
+  description: string;
+}> = {
+  "Todo": {
+    color: "#4A90E2",
     type: "unstarted",
     description: "Work that has been accepted but not yet started.",
   },
 
-  TRIAGE: {
-    color: "yellow",
+  "Triage": {
+    color: "#F2C94C",
     type: "unstarted",
     description: "New or unreviewed work awaiting prioritization or assignment.",
   },
 
-  IN_PROGRESS: {
-    color: "purple",
+  "In Progress": {
+    color: "#5E6AD2",
     type: "started",
     description: "Work actively being worked on.",
   },
 
-  DECLINED: {
-    color: "red",
+  "Declined": {
+    color: "#E5484D",
     type: "canceled",
     description: "Work that has been reviewed but will not be pursued.",
   },
-} as const;
+};
 
 
 /**
@@ -505,20 +513,19 @@ async function runScreening(
     
     // Determine target state based on screening result
     const targetState = determineIssueState(screeningResult);
-    
+
     // Map to state machine statuses
     let newStatusName: string;
-    let info;
     if (targetState === 'In Progress') {
       newStatusName = STATE_STATUSES.IN_PROGRESS;
-      info = STATE_STATUS_DETAILS.IN_PROGRESS;
     } else if (targetState === 'Declined') {
       newStatusName = STATE_STATUSES.DECLINED;
-      info = STATE_STATUS_DETAILS.DECLINED;
     } else {
       newStatusName = STATE_STATUSES.TRIAGE;
-      info = STATE_STATUS_DETAILS.TRIAGE;
     }
+
+    // Get state details for on-demand creation
+    const stateDetails = STATE_STATUS_DETAILS[newStatusName];
     
     // Get team and find target state
     const team = await issue.team;
@@ -531,10 +538,18 @@ async function runScreening(
 
     if (!targetStateObj) {
       logger.warn('Target state not found, creating it', { issueId: issue.id, newStatusName });
+
+      if (!stateDetails) {
+        logger.error('State details not found for state name', undefined, { issueId: issue.id, newStatusName });
+        return;
+      }
+
       const result = await client.createWorkflowState({
-        name: newStatusName,
-        ...info,
         teamId: team.id,
+        name: newStatusName,
+        type: stateDetails.type,
+        color: stateDetails.color,
+        description: stateDetails.description,
       });
       targetStateObj = await result.workflowState;
 
@@ -1136,7 +1151,7 @@ async function ensureState(
     if (!state) {
       logger.info('State not found, attempting to create', { teamId, stateName });
 
-      const stateDetails = STATE_STATUS_DETAILS[stateName as keyof typeof STATE_STATUS_DETAILS];
+      const stateDetails = STATE_STATUS_DETAILS[stateName];
 
       if (!stateDetails) {
         logger.warn('No state details found for state name', { stateName });

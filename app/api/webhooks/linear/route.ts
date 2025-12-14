@@ -482,18 +482,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     success = false;
     errorType = error instanceof Error ? error.name : 'UnknownError';
-    
+
     const err = error instanceof Error ? error : new Error(String(error));
-    
+
+    // Check if error is retriable
+    const shouldRetry = isRetryableError(error);
+
     logger.error('Webhook processing error', err, {
       eventType,
+      retriable: shouldRetry,
     });
-    
+
     // Emit critical failure event
     emitWebhookFailure(eventType, err, {
       duration: Date.now() - startTime,
     });
-    
+
     // Track failed webhook processing
     trackWebhookProcessing({
       eventType,
@@ -501,7 +505,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       success: false,
       errorType,
     });
-    
+
+    // For non-retriable errors, return 200 to prevent infinite retries
+    // For retriable errors, return 500 so Linear will retry
+    if (!shouldRetry) {
+      logger.warn('Non-retriable error, returning 200 to prevent retries', {
+        eventType,
+        errorType,
+      });
+      return NextResponse.json(
+        { success: false, error: 'Non-retriable error' },
+        { status: 200 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
