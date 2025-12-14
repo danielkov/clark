@@ -36,53 +36,18 @@ export const STATE_LABELS = {
   NEW: 'New',
   PROCESSED: 'Processed',
   PRE_SCREENED: 'Pre-screened',
+  DECLINED: 'Declined',
   REJECTION_EMAIL_SENT: 'Rejection-Email-Sent',
   SCREENING_INVITATION_SENT: 'Screening-Invitation-Sent',
 } as const;
 
 /**
- * State machine statuses
+ * State machine statuses (optional - used if they exist in the workspace)
  */
 export const STATE_STATUSES = {
   TODO: 'Todo',
-  TRIAGE: 'Triage',
   IN_PROGRESS: 'In Progress',
-  DECLINED: 'Declined',
 } as const;
-
-/**
- * State status details keyed by display name
- * Contains all necessary information to create states on-demand
- */
-const STATE_STATUS_DETAILS: Record<string, {
-  color: string;
-  type: "unstarted" | "started" | "completed" | "canceled";
-  description: string;
-}> = {
-  "Todo": {
-    color: "#4A90E2",
-    type: "unstarted",
-    description: "Work that has been accepted but not yet started.",
-  },
-
-  "Triage": {
-    color: "#F2C94C",
-    type: "unstarted",
-    description: "New or unreviewed work awaiting prioritization or assignment.",
-  },
-
-  "In Progress": {
-    color: "#5E6AD2",
-    type: "started",
-    description: "Work actively being worked on.",
-  },
-
-  "Declined": {
-    color: "#E5484D",
-    type: "canceled",
-    description: "Work that has been reviewed but will not be pursued.",
-  },
-};
 
 
 /**
@@ -131,36 +96,34 @@ export async function handleIssueUpdate(
     return;
   }
 
-  // Get current labels and state
+  // Get current labels
   const labels = await issue.labels();
   const labelNames = labels.nodes.map(l => l.name);
-  const state = await issue.state;
-  const stateName = state?.name;
-  
-  // State machine transitions
-  
+
+  // State machine transitions based on labels
+
   // Transition 0: New → Send Confirmation Email (if benefit exists)
   // This happens before document processing
-  if (stateName === STATE_STATUSES.TODO && labelNames.includes(STATE_LABELS.NEW)) {
+  if (labelNames.includes(STATE_LABELS.NEW)) {
     await sendConfirmationEmailIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
     await processDocuments(client, issue);
     return;
   }
-  
+
   // Transition 1: Processed → Run Screening
-  if (stateName === STATE_STATUSES.TODO && labelNames.includes(STATE_LABELS.PROCESSED)) {
+  if (labelNames.includes(STATE_LABELS.PROCESSED)) {
     await runScreening(client, issue, project, linearOrgId, linearAccessToken);
     return;
   }
-  
-  // Transition 2: In Progress + Pre-screened → Send AI Screening Invitation (if benefit exists)
-  if (stateName === STATE_STATUSES.IN_PROGRESS && labelNames.includes(STATE_LABELS.PRE_SCREENED)) {
+
+  // Transition 2: Pre-screened → Send AI Screening Invitation (if benefit exists)
+  if (labelNames.includes(STATE_LABELS.PRE_SCREENED)) {
     await sendScreeningInvitationIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
     return;
   }
-  
+
   // Transition 3: Declined → Send Rejection Email (if benefit exists)
-  if (stateName === STATE_STATUSES.DECLINED) {
+  if (labelNames.includes(STATE_LABELS.DECLINED)) {
     await sendRejectionEmailIfEnabled(issue, project, linearOrgId, linearOrgSlug, linearAccessToken);
     return;
   }
@@ -418,26 +381,12 @@ async function runScreening(
     // Check meter balance
     const balanceCheck = await checkMeterBalance(linearOrgId, 'candidate_screenings');
     
-    // If balance is 0, move to Triage (with comment added separately - not a state change)
+    // If balance is 0, skip screening and add Pre-screened label
     if (!balanceCheck.allowed && !balanceCheck.unlimited) {
-      logger.warn('Insufficient balance for screening, moving to Triage', {
+      logger.warn('Insufficient balance for screening', {
         issueId: issue.id,
         balance: balanceCheck.balance,
       });
-
-      // Get team and ensure Triage state exists
-      const team = await issue.team;
-      if (!team) {
-        logger.error('Issue team not found', undefined, { issueId: issue.id });
-        return;
-      }
-
-      const triageStateId = await ensureState(client, team.id, STATE_STATUSES.TRIAGE, STATE_STATUSES.TODO);
-
-      if (!triageStateId) {
-        logger.error('Failed to ensure Triage or Todo state', undefined, { issueId: issue.id });
-        return;
-      }
 
       // Get current labels and prepare new label set
       const labels = await issue.labels();
@@ -448,9 +397,13 @@ async function runScreening(
       // Ensure "Pre-screened" label exists
       const prescreenedLabelId = await ensureLabel(client, STATE_LABELS.PRE_SCREENED);
 
-      // SINGLE UPDATE: Update state and labels in one operation
+      // Try to find Todo status if it exists
+      const team = await issue.team;
+      const todoStateId = team ? await findStateByName(client, team.id, STATE_STATUSES.TODO) : null;
+
+      // SINGLE UPDATE: Update labels and optionally state
       await client.updateIssue(issue.id, {
-        stateId: triageStateId,
+        stateId: todoStateId || undefined,
         labelIds: [...currentLabelIds, prescreenedLabelId],
       });
 
@@ -475,19 +428,15 @@ async function runScreening(
         hasJobDescription: !!jobDescription,
       });
 
-      // Get team and ensure Triage state exists
+      // Try to update to Todo status if it exists
       const team = await issue.team;
-      if (!team) {
-        logger.error('Issue team not found', undefined, { issueId: issue.id });
-        return;
-      }
-
-      const triageStateId = await ensureState(client, team.id, STATE_STATUSES.TRIAGE, STATE_STATUSES.TODO);
-
-      if (triageStateId) {
-        await client.updateIssue(issue.id, {
-          stateId: triageStateId,
-        });
+      if (team) {
+        const todoStateId = await findStateByName(client, team.id, STATE_STATUSES.TODO);
+        if (todoStateId) {
+          await client.updateIssue(issue.id, {
+            stateId: todoStateId,
+          });
+        }
       }
       return;
     }
@@ -514,95 +463,72 @@ async function runScreening(
     // Determine target state based on screening result
     const targetState = determineIssueState(screeningResult);
 
-    // Map to state machine statuses
-    let newStatusName: string;
-    if (targetState === 'In Progress') {
-      newStatusName = STATE_STATUSES.IN_PROGRESS;
-    } else if (targetState === 'Declined') {
-      newStatusName = STATE_STATUSES.DECLINED;
-    } else {
-      newStatusName = STATE_STATUSES.TRIAGE;
-    }
-
-    // Get state details for on-demand creation
-    const stateDetails = STATE_STATUS_DETAILS[newStatusName];
-    
-    // Get team and find target state
-    const team = await issue.team;
-    if (!team) {
-      logger.error('Issue team not found', undefined, { issueId: issue.id });
-      return;
-    }
-    const states = await team.states();
-    let targetStateObj = states.nodes.find((s) => s.name === newStatusName);
-
-    if (!targetStateObj) {
-      logger.warn('Target state not found, creating it', { issueId: issue.id, newStatusName });
-
-      if (!stateDetails) {
-        logger.error('State details not found for state name', undefined, { issueId: issue.id, newStatusName });
-        return;
-      }
-
-      const result = await client.createWorkflowState({
-        teamId: team.id,
-        name: newStatusName,
-        type: stateDetails.type,
-        color: stateDetails.color,
-        description: stateDetails.description,
-      });
-      targetStateObj = await result.workflowState;
-
-      if (!targetStateObj) {
-        logger.error('Failed to create target state', undefined, { issueId: issue.id, newStatusName });
-        return;
-      }
-
-      logger.info('Target state created successfully', { issueId: issue.id, newStatusName, stateId: targetStateObj.id });
-    }
-    
     // Get current labels and prepare new label set
     const labels = await issue.labels();
     const currentLabelIds = labels.nodes
       .filter((l) => l.name !== STATE_LABELS.PROCESSED)
       .map((l) => l.id);
-    
+
     // Ensure "Pre-screened" label exists
     const prescreenedLabelId = await ensureLabel(client, STATE_LABELS.PRE_SCREENED);
-    
-    // SINGLE UPDATE: Update state and labels in one operation
+
+    // Get team to check for statuses
+    const team = await issue.team;
+    if (!team) {
+      logger.error('Issue team not found', undefined, { issueId: issue.id });
+      return;
+    }
+
+    // Determine which labels to add based on screening result
+    const labelsToAdd = [prescreenedLabelId];
+    let targetStateId: string | null = null;
+
+    if (targetState === 'In Progress') {
+      targetStateId = await findStateByName(client, team.id, STATE_STATUSES.IN_PROGRESS);
+    } else if (targetState === 'Declined') {
+      const declinedLabelId = await ensureLabel(client, STATE_LABELS.DECLINED);
+      labelsToAdd.push(declinedLabelId);
+      targetStateId = await findStateByName(client, team.id, STATE_STATUSES.TODO);
+    } else {
+      targetStateId = await findStateByName(client, team.id, STATE_STATUSES.TODO);
+    }
+
+    logger.info('Updating issue after screening', {
+      issueId: issue.id,
+      targetState,
+      targetStateId,
+      hasStateUpdate: !!targetStateId,
+    });
+
+    // SINGLE UPDATE: Update state (if found) and labels in one operation
     await client.updateIssue(issue.id, {
-      stateId: targetStateObj.id,
-      labelIds: [...currentLabelIds, prescreenedLabelId],
+      stateId: targetStateId || undefined,
+      labelIds: [...currentLabelIds, ...labelsToAdd],
     });
     
     // Add reasoning comment separately (doesn't trigger webhook)
     const reasoningComment = generateReasoningComment(screeningResult);
     await addIssueComment(linearAccessToken, issue.id, reasoningComment);
     
-    logger.info('Screening workflow completed', { issueId: issue.id, newStatus: newStatusName });
+    logger.info('Screening workflow completed', { issueId: issue.id, targetState });
   } catch (error) {
     logger.error('Error running screening', error instanceof Error ? error : new Error(String(error)), {
       issueId: issue.id,
     });
 
-    // Move to Triage on error
+    // Try to update to Todo status on error
     try {
       const team = await issue.team;
-      if (!team) {
-        logger.error('Issue team not found', undefined, { issueId: issue.id });
-        return;
-      }
-
-      const triageStateId = await ensureState(client, team.id, STATE_STATUSES.TRIAGE, STATE_STATUSES.TODO);
-
-      if (triageStateId) {
-        await client.updateIssue(issue.id, {
-          stateId: triageStateId,
-        });
+      if (team) {
+        const todoStateId = await findStateByName(client, team.id, STATE_STATUSES.TODO);
+        if (todoStateId) {
+          await client.updateIssue(issue.id, {
+            stateId: todoStateId,
+          });
+        }
       }
     } catch (updateError) {
-      logger.error('Failed to move to Triage on error', updateError instanceof Error ? updateError : new Error(String(updateError)), {
+      logger.error('Failed to update status on error', updateError instanceof Error ? updateError : new Error(String(updateError)), {
         issueId: issue.id,
       });
     }
@@ -1133,59 +1059,28 @@ async function ensureLabel(
 }
 
 /**
- * Ensure a workflow state exists and return its ID
- * Creates the state if it doesn't exist, with fallback to Todo
+ * Find a workflow state by name and return its ID
+ * Returns null if the state doesn't exist
  */
-async function ensureState(
+async function findStateByName(
   client: ReturnType<typeof createLinearClient>,
   teamId: string,
-  stateName: string,
-  fallbackStateName: string = STATE_STATUSES.TODO
+  stateName: string
 ): Promise<string | null> {
   try {
     const team = await client.team(teamId);
     const states = await team.states();
+    const state = states.nodes.find((s) => s.name === stateName);
 
-    let state = states.nodes.find((s) => s.name === stateName);
-
-    if (!state) {
-      logger.info('State not found, attempting to create', { teamId, stateName });
-
-      const stateDetails = STATE_STATUS_DETAILS[stateName];
-
-      if (!stateDetails) {
-        logger.warn('No state details found for state name', { stateName });
-        const fallbackState = states.nodes.find((s) => s.name === fallbackStateName);
-        return fallbackState?.id || null;
-      }
-
-      try {
-        const createResult = await client.createWorkflowState({
-          teamId,
-          name: stateName,
-          type: stateDetails.type,
-          color: stateDetails.color,
-          description: stateDetails.description,
-        });
-
-        if (createResult.success && createResult.workflowState) {
-          state = await createResult.workflowState;
-          logger.info('State created successfully', { stateName, stateId: state.id });
-        }
-      } catch (createError) {
-        logger.error('Failed to create state, using fallback', createError instanceof Error ? createError : new Error(String(createError)), {
-          stateName,
-          fallbackStateName,
-        });
-
-        const fallbackState = states.nodes.find((s) => s.name === fallbackStateName);
-        return fallbackState?.id || null;
-      }
+    if (state) {
+      logger.info('Found state', { stateName, stateId: state.id });
+      return state.id;
     }
 
-    return state?.id || null;
+    logger.info('State not found', { stateName });
+    return null;
   } catch (error) {
-    logger.error('Error ensuring state', error instanceof Error ? error : new Error(String(error)), {
+    logger.error('Error finding state', error instanceof Error ? error : new Error(String(error)), {
       teamId,
       stateName,
     });
