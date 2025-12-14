@@ -104,6 +104,19 @@ export async function withRetry<T>(
 export function isRetryableError(error: unknown): boolean {
   if (!error) return false;
 
+  // Handle Linear SDK errors with specific structure
+  if (typeof error === 'object' && error !== null) {
+    const errorObj = error as any;
+
+    // Linear "Entity not found" errors are non-retryable
+    if (
+      errorObj.type === 'InvalidInput' ||
+      (errorObj.extensions && errorObj.extensions.code === 'INPUT_ERROR')
+    ) {
+      return false;
+    }
+  }
+
   // Handle Error objects
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
