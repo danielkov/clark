@@ -184,8 +184,8 @@ export async function recordUsageEvent(
     // Determine event name based on meter
     const eventName =
       meterName === 'job_descriptions'
-        ? 'job_description_generated'
-        : 'candidate_screened';
+        ? config.polar.events.jobDescriptions
+        : config.polar.events.candidateScreenings;
 
     // Create usage event
     const event = {
@@ -217,8 +217,8 @@ export async function recordUsageEvent(
     await queueFailedEvent(linearOrgId, {
       name:
         meterName === 'job_descriptions'
-          ? 'job_description_generated'
-          : 'candidate_screened',
+          ? config.polar.events.jobDescriptions
+          : config.polar.events.candidateScreenings,
       externalCustomerId: linearOrgId,
       metadata: {
         userId: metadata?.userId || 'unknown',

@@ -416,43 +416,43 @@ async function runScreening(
         issueId: issue.id,
         balance: balanceCheck.balance,
       });
-      
-      // Get team and find Triage state
+
+      // Get team and ensure Triage state exists
       const team = await issue.team;
       if (!team) {
         logger.error('Issue team not found', undefined, { issueId: issue.id });
         return;
       }
-      const states = await team.states();
-      const triageState = states.nodes.find((s) => s.name === STATE_STATUSES.TRIAGE);
-      
-      if (!triageState) {
-        logger.error('Triage state not found', undefined, { issueId: issue.id });
+
+      const triageStateId = await ensureState(client, team.id, STATE_STATUSES.TRIAGE, STATE_STATUSES.TODO);
+
+      if (!triageStateId) {
+        logger.error('Failed to ensure Triage or Todo state', undefined, { issueId: issue.id });
         return;
       }
-      
+
       // Get current labels and prepare new label set
       const labels = await issue.labels();
       const currentLabelIds = labels.nodes
         .filter((l) => l.name !== STATE_LABELS.PROCESSED)
         .map((l) => l.id);
-      
+
       // Ensure "Pre-screened" label exists
       const prescreenedLabelId = await ensureLabel(client, STATE_LABELS.PRE_SCREENED);
-      
+
       // SINGLE UPDATE: Update state and labels in one operation
       await client.updateIssue(issue.id, {
-        stateId: triageState.id,
+        stateId: triageStateId,
         labelIds: [...currentLabelIds, prescreenedLabelId],
       });
-      
+
       // Add comment separately (doesn't trigger webhook)
       await addIssueComment(
         linearAccessToken,
         issue.id,
         '*Candidate screening skipped due to insufficient balance. Manual review required.*'
       );
-      
+
       return;
     }
     
@@ -466,20 +466,19 @@ async function runScreening(
         hasIssueDescription: !!issueDescription,
         hasJobDescription: !!jobDescription,
       });
-      
-      // Get team and find Triage state
+
+      // Get team and ensure Triage state exists
       const team = await issue.team;
       if (!team) {
         logger.error('Issue team not found', undefined, { issueId: issue.id });
         return;
       }
-      const states = await team.states();
-      const triageState = states.nodes.find((s) => s.name === STATE_STATUSES.TRIAGE);
-      
-      if (triageState) {
-        // SINGLE UPDATE: Just update state
+
+      const triageStateId = await ensureState(client, team.id, STATE_STATUSES.TRIAGE, STATE_STATUSES.TODO);
+
+      if (triageStateId) {
         await client.updateIssue(issue.id, {
-          stateId: triageState.id,
+          stateId: triageStateId,
         });
       }
       return;
@@ -571,7 +570,7 @@ async function runScreening(
     logger.error('Error running screening', error instanceof Error ? error : new Error(String(error)), {
       issueId: issue.id,
     });
-    
+
     // Move to Triage on error
     try {
       const team = await issue.team;
@@ -579,13 +578,12 @@ async function runScreening(
         logger.error('Issue team not found', undefined, { issueId: issue.id });
         return;
       }
-      const states = await team.states();
-      const triageState = states.nodes.find((s) => s.name === STATE_STATUSES.TRIAGE);
-      
-      if (triageState) {
-        // SINGLE UPDATE: Just update state
+
+      const triageStateId = await ensureState(client, team.id, STATE_STATUSES.TRIAGE, STATE_STATUSES.TODO);
+
+      if (triageStateId) {
         await client.updateIssue(issue.id, {
-          stateId: triageState.id,
+          stateId: triageStateId,
         });
       }
     } catch (updateError) {
@@ -1116,6 +1114,67 @@ async function ensureLabel(
       labelName,
     });
     throw error;
+  }
+}
+
+/**
+ * Ensure a workflow state exists and return its ID
+ * Creates the state if it doesn't exist, with fallback to Todo
+ */
+async function ensureState(
+  client: ReturnType<typeof createLinearClient>,
+  teamId: string,
+  stateName: string,
+  fallbackStateName: string = STATE_STATUSES.TODO
+): Promise<string | null> {
+  try {
+    const team = await client.team(teamId);
+    const states = await team.states();
+
+    let state = states.nodes.find((s) => s.name === stateName);
+
+    if (!state) {
+      logger.info('State not found, attempting to create', { teamId, stateName });
+
+      const stateDetails = STATE_STATUS_DETAILS[stateName as keyof typeof STATE_STATUS_DETAILS];
+
+      if (!stateDetails) {
+        logger.warn('No state details found for state name', { stateName });
+        const fallbackState = states.nodes.find((s) => s.name === fallbackStateName);
+        return fallbackState?.id || null;
+      }
+
+      try {
+        const createResult = await client.createWorkflowState({
+          teamId,
+          name: stateName,
+          type: stateDetails.type,
+          color: stateDetails.color,
+          description: stateDetails.description,
+        });
+
+        if (createResult.success && createResult.workflowState) {
+          state = await createResult.workflowState;
+          logger.info('State created successfully', { stateName, stateId: state.id });
+        }
+      } catch (createError) {
+        logger.error('Failed to create state, using fallback', createError instanceof Error ? createError : new Error(String(createError)), {
+          stateName,
+          fallbackStateName,
+        });
+
+        const fallbackState = states.nodes.find((s) => s.name === fallbackStateName);
+        return fallbackState?.id || null;
+      }
+    }
+
+    return state?.id || null;
+  } catch (error) {
+    logger.error('Error ensuring state', error instanceof Error ? error : new Error(String(error)), {
+      teamId,
+      stateName,
+    });
+    return null;
   }
 }
 

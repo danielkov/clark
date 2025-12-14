@@ -35,8 +35,14 @@ export const config = {
       enterprise: process.env.POLAR_ENTERPRISE_PRODUCT_ID || '',
     },
     meters: {
+      // Meter IDs (UUIDs) used to query meter balances from Polar API
       jobDescriptions: process.env.POLAR_JOB_DESCRIPTIONS_METER_ID || '',
       candidateScreenings: process.env.POLAR_CANDIDATE_SCREENINGS_METER_ID || '',
+    },
+    events: {
+      // Event names used when ingesting usage events to Polar
+      jobDescriptions: 'job_description_generated',
+      candidateScreenings: 'candidate_screened',
     },
     benefits: {
       customToneOfVoice: process.env.POLAR_CUSTOM_TONE_OF_VOICE_BENEFIT_ID || '',
