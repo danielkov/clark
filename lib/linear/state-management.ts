@@ -241,11 +241,11 @@ export async function addIssueComment(
   linearAccessToken: string,
   issueId: string,
   commentBody: string
-): Promise<boolean> {
+): Promise<string | null> {
   try {
     // Create Linear client
     const client = createLinearClient(linearAccessToken);
-    
+
     // Create the comment with retry logic
     const commentPayload = await withRetry(
       () => client.createComment({
@@ -259,16 +259,123 @@ export async function addIssueComment(
         shouldRetry: isRetryableError,
       }
     );
-    
+
     if (!commentPayload.success) {
       console.error('Failed to create comment:', commentPayload);
-      return false;
+      return null;
     }
-    
-    console.log(`Successfully added comment to Issue ${issueId}`);
-    return true;
+
+    const commentId = commentPayload.commentId;
+
+    if (!commentId) {
+      console.error('Comment created but ID not available');
+      return null;
+    }
+
+    console.log(`Successfully added comment to Issue ${issueId}`, { commentId });
+    return commentId;
   } catch (error) {
     console.error('Error adding Issue comment:', error);
+    return null;
+  }
+}
+
+/**
+ * Add a threaded comment (reply to another comment)
+ *
+ * @param linearAccessToken Linear API access token
+ * @param issueId The ID of the Issue
+ * @param parentCommentId The ID of the parent comment to reply to
+ * @param commentBody The comment text (supports markdown)
+ * @param createAsUser Optional user name to display as comment author
+ * @returns The comment ID if successful, null otherwise
+ */
+export async function addThreadedComment(
+  linearAccessToken: string,
+  issueId: string,
+  parentCommentId: string,
+  commentBody: string,
+  createAsUser?: string
+): Promise<string | null> {
+  try {
+    // Create Linear client
+    const client = createLinearClient(linearAccessToken);
+
+    // Create the threaded comment with retry logic
+    const commentPayload = await withRetry(
+      () => client.createComment({
+        issueId,
+        parentId: parentCommentId,
+        body: commentBody,
+        createAsUser: createAsUser || "Clark (bot)",
+      }),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    if (!commentPayload.success) {
+      console.error('Failed to create threaded comment:', commentPayload);
+      return null;
+    }
+
+    const comment = await commentPayload.comment;
+    const commentId = comment?.id;
+
+    if (!commentId) {
+      console.error('Threaded comment created but ID not available');
+      return null;
+    }
+
+    console.log(`Successfully added threaded comment to Issue ${issueId}`, { commentId, parentCommentId });
+    return commentId;
+  } catch (error) {
+    console.error('Error adding threaded comment:', error);
+    return null;
+  }
+}
+
+/**
+ * Add an emoji reaction to a comment
+ *
+ * @param linearAccessToken Linear API access token
+ * @param commentId The ID of the comment to react to
+ * @param emoji The emoji to react with (e.g., '✉️', '❌')
+ * @returns True if the reaction was added successfully, false otherwise
+ */
+export async function addCommentReaction(
+  linearAccessToken: string,
+  commentId: string,
+  emoji: string
+): Promise<boolean> {
+  try {
+    // Create Linear client
+    const client = createLinearClient(linearAccessToken);
+
+    // Create the reaction with retry logic
+    const reactionPayload = await withRetry(
+      () => client.createReaction({
+        commentId,
+        emoji,
+      }),
+      {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    if (!reactionPayload.success) {
+      console.error('Failed to create reaction:', reactionPayload);
+      return false;
+    }
+
+    console.log(`Successfully added reaction to comment ${commentId}`, { emoji });
+    return true;
+  } catch (error) {
+    console.error('Error adding comment reaction:', error);
     return false;
   }
 }

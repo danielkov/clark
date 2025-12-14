@@ -18,61 +18,65 @@ import { logger } from '@/lib/datadog/logger';
 
 /**
  * Generate a dynamic reply-to address that encodes issue metadata
- * 
- * Format: <org>+<issue_id>@domain.com
- * Example: acme+issue_abc123@replies.yourdomain.com
- * 
- * This allows us to route replies back to the correct Linear Issue
+ *
+ * Format: <org>+<issue_id>+<comment_id>@domain.com
+ * Example: acme+issue_abc123+comment_xyz@replies.yourdomain.com
+ *
+ * This allows us to route replies back to the correct Linear Issue and thread
  * without maintaining a database mapping.
- * 
+ *
  * @param linearOrg - Linear organization identifier
  * @param issueId - Linear Issue ID
+ * @param commentId - Linear Comment ID for threading
  * @returns Dynamic reply-to email address
  */
-export function generateReplyToAddress(linearOrg: string, issueId: string): string {
+export function generateReplyToAddress(linearOrg: string, issueId: string, commentId: string): string {
   // Sanitize inputs to ensure valid email format
   const sanitizedOrg = linearOrg.toLowerCase().replace(/[^a-z0-9-]/g, '');
   const sanitizedIssueId = issueId.toLowerCase().replace(/[^a-z0-9-]/g, '');
-  
-  return `${sanitizedOrg}+${sanitizedIssueId}@${config.resend.replyDomain}`;
+  const sanitizedCommentId = commentId.toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+  return `${sanitizedOrg}+${sanitizedIssueId}+${sanitizedCommentId}@${config.resend.replyDomain}`;
 }
 
 /**
  * Parse reply-to address to extract metadata
- * 
- * Extracts Linear org and issue ID from the email address format:
- * <org>+<issue_id>@domain.com
- * 
+ *
+ * Extracts Linear org, issue ID, and comment ID from the email address format:
+ * <org>+<issue_id>+<comment_id>@domain.com
+ *
  * @param email - Email address to parse
- * @returns Object with linearOrg and issueId, or null if parsing fails
+ * @returns Object with linearOrg, issueId, and commentId, or null if parsing fails
  */
-export function parseReplyToAddress(email: string): { linearOrg: string; issueId: string } | null {
+export function parseReplyToAddress(email: string): { linearOrg: string; issueId: string; commentId: string } | null {
   try {
-    // Extract from format: <org>+<issue_id>@domain.com
-    const match = email.match(/^([^+]+)\+([^@]+)@/);
-    
+    // Extract from format: <org>+<issue_id>+<comment_id>@domain.com
+    const match = email.match(/^([^+]+)\+([^+@]+)\+([^@]+)@/);
+
     if (!match) {
       logger.warn('Failed to parse reply-to address', {
         email,
-        reason: 'Invalid format',
+        reason: 'Invalid format - expected format: org+issueId+commentId@domain',
       });
       return null;
     }
-    
+
     const linearOrg = match[1];
     const issueId = match[2];
-    
-    if (!linearOrg || !issueId) {
+    const commentId = match[3];
+
+    if (!linearOrg || !issueId || !commentId) {
       logger.warn('Failed to parse reply-to address', {
         email,
-        reason: 'Missing org or issue ID',
+        reason: 'Missing org, issue ID, or comment ID',
       });
       return null;
     }
-    
+
     return {
       linearOrg,
       issueId,
+      commentId,
     };
   } catch (error) {
     logger.error('Error parsing reply-to address', error as Error, {

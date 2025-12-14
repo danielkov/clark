@@ -15,7 +15,7 @@ import {
   getLastMessageId, 
   buildThreadReferences 
 } from '@/lib/resend/email-threading';
-import { addIssueComment } from './state-management';
+import { addIssueComment, addThreadedComment, addCommentReaction } from './state-management';
 import { withRetry, isRetryableError } from '../utils/retry';
 import { logger } from '@/lib/datadog/logger';
 import { extractCandidateMetadata } from './candidate-metadata';
@@ -193,7 +193,80 @@ export async function handleCommentToEmail(
       });
       return;
     }
-    
+
+    // Check if comment is a threaded reply (has a parent)
+    const parentCommentId = comment.parentId;
+
+    if (!parentCommentId) {
+      logger.info('Comment is not a threaded reply, skipping comment-to-email', {
+        commentId,
+        issueId,
+      });
+      return;
+    }
+
+    logger.info('Comment is a threaded reply, checking parent', {
+      commentId,
+      issueId,
+      parentCommentId,
+    });
+
+    // Fetch the parent comment to verify it's a system email comment
+    let parentComment;
+    try {
+      parentComment = await withRetry(
+        () => client.comment({ id: parentCommentId }),
+        {
+          maxAttempts: 3,
+          initialDelayMs: 1000,
+          shouldRetry: isRetryableError,
+        }
+      );
+
+      if (!parentComment) {
+        logger.error('Parent comment not found', undefined, { parentCommentId, commentId, issueId });
+        return;
+      }
+    } catch (error) {
+      logger.error('Error fetching parent comment', error instanceof Error ? error : new Error(String(error)), {
+        parentCommentId,
+        commentId,
+        issueId,
+      });
+      return;
+    }
+
+    const parentCommentBody = parentComment.body || '';
+    const parentBotActor = await parentComment.botActor;
+
+    const isFromOurBot = parentBotActor?.name === 'Clark (bot)';
+    const isEmailSystemComment =
+      parentCommentBody.includes('*Confirmation email sent') ||
+      parentCommentBody.includes('*Rejection email sent') ||
+      parentCommentBody.includes('*AI Screening invitation sent');
+
+    const isSystemEmailComment = isFromOurBot && isEmailSystemComment;
+
+    if (!isSystemEmailComment) {
+      logger.info('Parent comment is not a system email comment from our bot, skipping comment-to-email', {
+        commentId,
+        issueId,
+        parentCommentId,
+        botActorName: parentBotActor?.name,
+        isFromOurBot,
+        isEmailSystemComment,
+        parentBodyPreview: parentCommentBody.substring(0, 100),
+      });
+      return;
+    }
+
+    logger.info('Parent comment is a system email comment from our bot, proceeding with comment-to-email', {
+      commentId,
+      issueId,
+      parentCommentId,
+      botActorName: parentBotActor.name,
+    });
+
     // Fetch the issue
     const issue = await withRetry(
       () => client.issue(issueId),
@@ -251,28 +324,29 @@ export async function handleCommentToEmail(
       return;
     }
     const positionTitle = project.name;
-    
-    // Generate reply-to address for threading
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
-    
+
+    // Generate reply-to address using PARENT comment ID for proper threading
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, parentCommentId);
+
     // Get all comments for threading
     const issueComments = await issue.comments();
     const commentBodies = issueComments.nodes.map(c => c.body || '');
-    
+
     // Extract threading information
     const lastMessageId = getLastMessageId(commentBodies);
     const references = buildThreadReferences(commentBodies);
-    
+
     logger.info('Sending comment as email', {
       commentId,
       issueId,
+      parentCommentId,
       candidateEmail,
       candidateName,
       positionTitle,
       hasThreading: !!lastMessageId,
       referencesCount: references.length,
     });
-    
+
     // Send comment as email (Requirement 2.1)
     try {
       const emailResult = await sendCommentEmail({
@@ -286,44 +360,73 @@ export async function handleCommentToEmail(
         references: references.length > 0 ? references : undefined,
         organizationName,
       });
-      
-      // Add note to Linear Issue documenting email sent (Requirement 2.3)
+
       const messageId = emailResult?.id || 'unknown';
-      const noteBody = `*Comment email sent to ${candidateEmail} by ${commentUserName}*\n\n---\n\nMessage-ID: ${messageId}`;
-      
-      await addIssueComment(
+
+      // Add ✉️ reaction to indicate email was sent successfully
+      const reactionAdded = await addCommentReaction(
         linearAccessToken,
-        issue.id,
-        noteBody
+        commentId,
+        '✉️'
       );
-      
-      logger.info('Comment email sent and documented', {
+
+      if (!reactionAdded) {
+        logger.warn('Failed to add success reaction to comment', {
+          commentId,
+          issueId,
+        });
+      }
+
+      logger.info('Comment email sent and reaction added', {
         commentId,
         issueId,
+        parentCommentId,
         emailId: messageId,
         candidateEmail,
+        reactionAdded,
       });
     } catch (emailError) {
       // Log error but don't throw - we want the webhook to succeed
       logger.error('Failed to send comment email', emailError instanceof Error ? emailError : new Error(String(emailError)), {
         commentId,
         issueId,
+        parentCommentId,
         candidateEmail,
       });
-      
-      // Add comment noting the failure
-      try {
-        await addIssueComment(
-          linearAccessToken,
-          issue.id,
-          `*Failed to send comment email to ${candidateEmail}. Error: ${emailError instanceof Error ? emailError.message : 'Unknown error'}*`
-        );
-      } catch (commentError) {
-        logger.error('Failed to add email failure comment', commentError instanceof Error ? commentError : new Error(String(commentError)), {
+
+      // Add ❌ reaction to indicate failure
+      const errorReactionAdded = await addCommentReaction(
+        linearAccessToken,
+        commentId,
+        '❌'
+      );
+
+      if (!errorReactionAdded) {
+        logger.warn('Failed to add error reaction to comment', {
           commentId,
           issueId,
         });
       }
+
+      // Also create a threaded reply with error details
+      const errorMessage = `Failed to send email to candidate. Error: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`;
+
+      const errorCommentId = await addThreadedComment(
+        linearAccessToken,
+        issueId,
+        commentId,
+        errorMessage,
+        'Clark (bot)'
+      );
+
+      logger.error('Failed to send comment email, added error reaction and comment', emailError instanceof Error ? emailError : new Error(String(emailError)), {
+        commentId,
+        issueId,
+        parentCommentId,
+        candidateEmail,
+        errorReactionAdded,
+        errorCommentId,
+      });
     }
   } catch (error) {
     logger.error('Error in comment-to-email handler', error instanceof Error ? error : new Error(String(error)), {

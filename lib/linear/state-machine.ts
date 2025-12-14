@@ -209,10 +209,24 @@ async function sendConfirmationEmailIfEnabled(
     }
     const organization = await team.organization;
     const organizationName = organization?.name || 'Our Team';
-    
-    // Generate dynamic reply-to address using organization slug (not ID)
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
-    
+
+    // Create comment FIRST to get comment ID for threading
+    const commentBody = `*Confirmation email sent to ${candidateInfo.email}*\n\nReplies to this email will be added as comments to this issue.\n\n---\n\nMessage-ID: pending`;
+
+    const commentId = await addIssueComment(
+      linearAccessToken,
+      issue.id,
+      commentBody
+    );
+
+    if (!commentId) {
+      logger.error('Failed to create comment before sending confirmation email', undefined, { issueId: issue.id });
+      return;
+    }
+
+    // Generate dynamic reply-to address WITH comment ID for threading
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, commentId);
+
     logger.info('Sending confirmation email', {
       issueId: issue.id,
       candidateEmail: candidateInfo.email,
@@ -220,8 +234,9 @@ async function sendConfirmationEmailIfEnabled(
       positionTitle,
       organizationName,
       replyToAddress,
+      commentId,
     });
-    
+
     // Send confirmation email
     try {
       const emailResult = await sendConfirmationEmail({
@@ -231,27 +246,27 @@ async function sendConfirmationEmailIfEnabled(
         positionTitle,
         replyTo: replyToAddress,
       });
-      
+
       logger.info('Confirmation email sent successfully', {
         issueId: issue.id,
         emailId: emailResult?.id,
         candidateEmail: candidateInfo.email,
+        commentId,
       });
-      
-      // Add comment to Linear Issue documenting the email sent
-      // Include Message-ID for future threading
+
+      // Update comment with actual Message-ID
       const messageId = emailResult?.id || 'unknown';
-      const commentBody = `*Confirmation email sent to ${candidateInfo.email}*\n\nReplies to this email will be added as comments to this issue.\n\n---\n\nMessage-ID: ${messageId}`;
-      
-      await addIssueComment(
-        linearAccessToken,
-        issue.id,
-        commentBody
-      );
-      
-      logger.info('Added confirmation email comment to issue', {
+      const updatedCommentBody = `*Confirmation email sent to ${candidateInfo.email}*\n\nReplies to this email will be added as comments to this issue.\n\n---\n\nMessage-ID: ${messageId}`;
+
+      const client = createLinearClient(linearAccessToken);
+      await client.updateComment(commentId, {
+        body: updatedCommentBody,
+      });
+
+      logger.info('Updated confirmation email comment with Message-ID', {
         issueId: issue.id,
         messageId,
+        commentId,
       });
     } catch (emailError) {
       // Handle email sending failures gracefully - log but don't throw
@@ -640,18 +655,32 @@ async function sendRejectionEmailIfEnabled(
     }
     const organization = await team.organization;
     const organizationName = organization?.name || 'Our Team';
-    
-    // Generate dynamic reply-to address using organization slug
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
-    
+
+    // Create comment FIRST to get comment ID for threading
+    const commentBody = `*Rejection email sent to ${candidateInfo.email}*\n\nThis candidate has been notified of the decision.\n\n---\n\nMessage-ID: pending`;
+
+    const commentId = await addIssueComment(
+      linearAccessToken,
+      issue.id,
+      commentBody
+    );
+
+    if (!commentId) {
+      logger.error('Failed to create comment before sending rejection email', undefined, { issueId: issue.id });
+      return;
+    }
+
+    // Generate dynamic reply-to address WITH comment ID for threading
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, commentId);
+
     // Get all comments for threading
     const issueComments = await issue.comments();
     const commentBodies = issueComments.nodes.map(c => c.body || '');
-    
+
     // Extract threading information from previous comments
     const lastMessageId = getLastMessageId(commentBodies);
     const references = buildThreadReferences(commentBodies);
-    
+
     logger.info('Sending rejection email', {
       issueId: issue.id,
       candidateEmail: candidateInfo.email,
@@ -659,14 +688,15 @@ async function sendRejectionEmailIfEnabled(
       positionTitle,
       organizationName,
       replyToAddress,
+      commentId,
       hasThreading: !!lastMessageId,
       referencesCount: references.length,
     });
-    
+
     // Send rejection email (Requirement 4.1)
     // Use issue ID as idempotency key to prevent duplicate sends
     const idempotencyKey = `rejection-${issue.id}`;
-    
+
     try {
       const emailResult = await sendRejectionEmail({
         to: candidateInfo.email,
@@ -678,43 +708,42 @@ async function sendRejectionEmailIfEnabled(
         references: references.length > 0 ? references : undefined,
         idempotencyKey,
       });
-      
+
       logger.info('Rejection email sent successfully', {
         issueId: issue.id,
         emailId: emailResult?.id,
         candidateEmail: candidateInfo.email,
+        commentId,
         idempotencyKey,
       });
-      
+
       // Get the client to add the label
       const client = createLinearClient(linearAccessToken);
-      
+
       // Ensure "Rejection-Email-Sent" label exists
       const rejectionEmailSentLabelId = await ensureLabel(client, STATE_LABELS.REJECTION_EMAIL_SENT);
-      
+
       // Get current labels
       const currentLabels = await issue.labels();
       const currentLabelIds = currentLabels.nodes.map(l => l.id);
-      
+
       // Add the "Rejection-Email-Sent" label to mark idempotency
       await client.updateIssue(issue.id, {
         labelIds: [...currentLabelIds, rejectionEmailSentLabelId],
       });
-      
-      // Add comment to Linear Issue documenting the rejection email (Requirement 4.2)
-      // Include Message-ID for future threading
+
+      // Update comment with actual Message-ID
       const messageId = emailResult?.id || 'unknown';
-      const commentBody = `*Rejection email sent to ${candidateInfo.email}*\n\nThis candidate has been notified of the decision.\n\n---\n\nMessage-ID: ${messageId}`;
-      
-      await addIssueComment(
-        linearAccessToken,
-        issue.id,
-        commentBody
-      );
-      
-      logger.info('Added rejection email comment and label to issue', {
+      const updatedCommentBody = `*Rejection email sent to ${candidateInfo.email}*\n\nThis candidate has been notified of the decision.\n\n---\n\nMessage-ID: ${messageId}`;
+
+      await client.updateComment(commentId, {
+        body: updatedCommentBody,
+      });
+
+      logger.info('Updated rejection email comment with Message-ID and added label', {
         issueId: issue.id,
         messageId,
+        commentId,
       });
     } catch (emailError) {
       // Handle email sending failures gracefully - log but don't throw
@@ -932,18 +961,32 @@ async function sendScreeningInvitationIfEnabled(
     
     // Construct the interview URL
     const sessionLink = `${config.app.url}/interview/${secret}`;
-    
-    // Generate dynamic reply-to address using organization slug
-    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id);
-    
+
+    // Create comment FIRST to get comment ID for threading
+    const commentBody = `*AI Screening invitation sent to ${candidateInfo.email}*\n\nThe candidate has been invited to complete an AI-powered screening interview.\n\nSecret: ${secret.substring(0, 8)}...\n\n---\n\nMessage-ID: pending`;
+
+    const commentId = await addIssueComment(
+      linearAccessToken,
+      issue.id,
+      commentBody
+    );
+
+    if (!commentId) {
+      logger.error('Failed to create comment before sending screening invitation', undefined, { issueId: issue.id });
+      return;
+    }
+
+    // Generate dynamic reply-to address WITH comment ID for threading
+    const replyToAddress = generateReplyToAddress(linearOrgSlug, issue.id, commentId);
+
     // Get all comments for threading
     const issueComments = await issue.comments();
     const commentBodies = issueComments.nodes.map(c => c.body || '');
-    
+
     // Extract threading information from previous comments
     const lastMessageId = getLastMessageId(commentBodies);
     const references = buildThreadReferences(commentBodies);
-    
+
     logger.info('Sending screening invitation email', {
       issueId: issue.id,
       candidateEmail: candidateInfo.email,
@@ -951,10 +994,11 @@ async function sendScreeningInvitationIfEnabled(
       positionTitle,
       organizationName,
       replyToAddress,
+      commentId,
       hasThreading: !!lastMessageId,
       referencesCount: references.length,
     });
-    
+
     // Send screening invitation email (Requirement 5.1)
     try {
       const emailResult = await sendScreeningInvitationEmail({
@@ -967,43 +1011,42 @@ async function sendScreeningInvitationIfEnabled(
         inReplyTo: lastMessageId || undefined,
         references: references.length > 0 ? references : undefined,
       });
-      
+
       logger.info('Screening invitation email sent successfully', {
         issueId: issue.id,
         emailId: emailResult?.id,
         candidateEmail: candidateInfo.email,
+        commentId,
         secret: secret.substring(0, 8) + '...',
       });
-      
+
       // Get the client to add the label
       const client = createLinearClient(linearAccessToken);
-      
+
       // Ensure "Screening-Invitation-Sent" label exists
       const screeningInvitationSentLabelId = await ensureLabel(client, STATE_LABELS.SCREENING_INVITATION_SENT);
-      
+
       // Get current labels
       const currentLabels = await issue.labels();
       const currentLabelIds = currentLabels.nodes.map(l => l.id);
-      
+
       // Add the "Screening-Invitation-Sent" label to mark idempotency
       await client.updateIssue(issue.id, {
         labelIds: [...currentLabelIds, screeningInvitationSentLabelId],
       });
-      
-      // Add comment to Linear Issue documenting the invitation (Requirement 5.2)
-      // Include Message-ID for future threading
+
+      // Update comment with actual Message-ID
       const messageId = emailResult?.id || 'unknown';
-      const commentBody = `*AI Screening invitation sent to ${candidateInfo.email}*\n\nThe candidate has been invited to complete an AI-powered screening interview.\n\nSecret: ${secret.substring(0, 8)}...\n\n---\n\nMessage-ID: ${messageId}`;
-      
-      await addIssueComment(
-        linearAccessToken,
-        issue.id,
-        commentBody
-      );
-      
-      logger.info('Added screening invitation comment and label to issue', {
+      const updatedCommentBody = `*AI Screening invitation sent to ${candidateInfo.email}*\n\nThe candidate has been invited to complete an AI-powered screening interview.\n\nSecret: ${secret.substring(0, 8)}...\n\n---\n\nMessage-ID: ${messageId}`;
+
+      await client.updateComment(commentId, {
+        body: updatedCommentBody,
+      });
+
+      logger.info('Updated screening invitation comment with Message-ID and added label', {
         issueId: issue.id,
         messageId,
+        commentId,
         secret: secret.substring(0, 8) + '...',
       });
     } catch (emailError) {

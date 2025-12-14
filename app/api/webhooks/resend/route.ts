@@ -151,11 +151,12 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
     return;
   }
   
-  const { linearOrg, issueId } = parsed;
-  
+  const { linearOrg, issueId, commentId } = parsed;
+
   logger.info('Parsed to address', {
     linearOrg,
     issueId,
+    commentId,
     from: data.from,
     correlationId,
   });
@@ -287,54 +288,48 @@ async function handleEmailReceived(event: ResendInboundEmailEvent, correlationId
   
   // Clean email content (remove quotes, formatting, etc.)
   const cleanedContent = cleanEmailContent(rawContent);
-  
+
   // Extract sender name from "from" address
   // Format: "Name <email@example.com>" or just "email@example.com"
   const senderMatch = data.from.match(/^(.+?)\s*<.+>$/);
-  const senderName = senderMatch ? senderMatch[1].trim() : data.from;
-  
-  // Generate a unique message ID for this email
-  // Use the from address and timestamp to create a pseudo-message-id
-  const messageId = `${data.from.replace(/[^a-z0-9]/gi, '')}_${Date.now()}`;
-  
-  // Format comment with metadata footer
-  const commentBody = formatEmailCommentWithMetadata(
-    cleanedContent,
-    senderName,
-    messageId
-  );
-  
-  // Add comment to Linear Issue
+  const candidateName = senderMatch ? senderMatch[1].trim() : data.from;
+
+  // Add threaded comment to Linear Issue (reply to the system email comment)
   try {
     await linearClient.createComment({
       issueId: issue.id,
-      body: commentBody,
+      parentId: commentId,
+      body: cleanedContent,
+      createAsUser: candidateName,
     });
-    
-    logger.info('Added email reply as comment to Linear Issue', {
+
+    logger.info('Added email reply as threaded comment to Linear Issue', {
       issueId: issue.id,
+      parentCommentId: commentId,
       from: data.from,
-      senderName,
+      candidateName,
       correlationId,
     });
   } catch (error) {
-    logger.error('Error adding comment to Linear Issue', error as Error, {
+    logger.error('Error adding threaded comment to Linear Issue', error as Error, {
       issueId: issue.id,
+      parentCommentId: commentId,
       from: data.from,
       correlationId,
     });
-    
+
     // Emit event for monitoring/alerting
     emitWebhookFailure(
       'resend:comment_creation_error',
       error as Error,
       {
         issueId: issue.id,
+        parentCommentId: commentId,
         from: data.from,
         correlationId,
       }
     );
-    
+
     // Return 500 for retry
     throw error;
   }
