@@ -59,7 +59,7 @@ const STATE_STATUS_DETAILS = {
 
   TRIAGE: {
     color: "yellow",
-    type: "triage",
+    type: "unstarted",
     description: "New or unreviewed work awaiting prioritization or assignment.",
   },
 
@@ -529,20 +529,22 @@ async function runScreening(
     }
     const states = await team.states();
     let targetStateObj = states.nodes.find((s) => s.name === newStatusName);
-    
+
     if (!targetStateObj) {
-      logger.warn('Target state not found', { issueId: issue.id, newStatusName });
-      // create target state
+      logger.warn('Target state not found, creating it', { issueId: issue.id, newStatusName });
       const result = await client.createWorkflowState({
         name: newStatusName,
         ...info,
         teamId: team.id,
       });
       targetStateObj = await result.workflowState;
-      return;
-    }
-    if (!targetStateObj) {
-      logger.error('Failed to create target state', undefined, { issueId: issue.id, newStatusName });
+
+      if (!targetStateObj) {
+        logger.error('Failed to create target state', undefined, { issueId: issue.id, newStatusName });
+        return;
+      }
+
+      logger.info('Target state created successfully', { issueId: issue.id, newStatusName, stateId: targetStateObj.id });
     }
     
     // Get current labels and prepare new label set
