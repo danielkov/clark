@@ -6,7 +6,7 @@ import type { NextRequest, NextFetchEvent } from 'next/server';
 const authMiddleware = authkitMiddleware({
   middlewareAuth: {
     enabled: true,
-    unauthenticatedPaths: ['/', '/jobs/:path*'],
+    unauthenticatedPaths: ['/', '/jobs/:path*', '/interview/:path*'],
   },
 });
 

@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 
 import "./globals.css"
 
@@ -15,9 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        <AuthKitProvider>{children}</AuthKitProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

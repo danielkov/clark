@@ -8,6 +8,7 @@
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/datadog/logger';
+import { ConversationHistoryTranscriptCommonModelOutput } from '@elevenlabs/elevenlabs-js/api';
 
 // Initialize ElevenLabs client
 const elevenlabs = new ElevenLabsClient({
@@ -158,23 +159,46 @@ export function parseWebhookEvent(payload: string): ElevenLabsWebhookEvent {
 }
 
 /**
+ * Get conversation details including transcript from ElevenLabs
+ *
+ * @param conversationId - The ElevenLabs conversation ID
+ * @returns Conversation details with transcript
+ */
+export async function getConversation(conversationId: string) {
+  try {
+    const conversation = await elevenlabs.conversationalAi.conversations.get(conversationId);
+
+    logger.info('Retrieved conversation from ElevenLabs', {
+      conversationId,
+      status: conversation.status,
+    });
+
+    return conversation;
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+
+    logger.error('Failed to get conversation from ElevenLabs', err, {
+      conversationId,
+      errorType: err.name,
+    });
+
+    throw new Error(`Failed to get conversation: ${err.message}`);
+  }
+}
+
+/**
  * Format transcript for display or storage
- * 
+ *
  * @param transcript - Array of transcript messages
  * @returns Formatted transcript string
  */
 export function formatTranscript(
-  transcript: Array<{
-    role: 'agent' | 'user';
-    message: string;
-    timestamp: string;
-  }>
+  transcript: ConversationHistoryTranscriptCommonModelOutput[]
 ): string {
   return transcript
     .map((entry) => {
-      const time = new Date(entry.timestamp).toLocaleTimeString();
       const speaker = entry.role === 'agent' ? 'AI Interviewer' : 'Candidate';
-      return `[${time}] ${speaker}: ${entry.message}`;
+      return `${speaker}: ${entry.message}`;
     })
     .join('\n\n');
 }

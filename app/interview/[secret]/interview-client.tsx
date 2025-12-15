@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useConversation } from '@11labs/react';
-import { getInterviewSession, startInterviewSession } from '@/lib/actions/interview';
+import { getInterviewSession, startInterviewSession, processInterviewCompletion } from '@/lib/elevenlabs/interview-actions';
 
 interface InterviewClientProps {
   secret: string;
@@ -35,11 +35,28 @@ export function InterviewClient({ secret }: InterviewClientProps) {
     onConnect: () => {
       console.log('Connected to ElevenLabs');
     },
-    onDisconnect: () => {
-      console.log('Disconnected from ElevenLabs');
+    onDisconnect: async () => {
+      console.log('Disconnected from ElevenLabs, processing interview completion...');
+      try {
+        const result = await processInterviewCompletion(secret);
+        if (!result.success) {
+          console.error('Failed to process interview completion:', result.error);
+        } else {
+          console.log('Interview completion processed successfully');
+        }
+      } catch (err) {
+        console.error('Error processing interview completion:', err);
+      }
     },
-    onMessage: (message: any) => {
-      console.log('Message:', message);
+    onMessage: (message) => {
+      if (
+        message.role === 'agent' &&
+        message.message.includes('[END_INTERVIEW]')
+      ) {
+        setTimeout(() => {
+          conversation.endSession();
+        }, 1500); // allow TTS to finish
+      }
     },
     onError: (error: any) => {
       console.error('ElevenLabs error:', error);
