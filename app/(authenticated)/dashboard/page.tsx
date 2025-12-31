@@ -61,7 +61,7 @@ export default async function DashboardPage() {
     const { checkRedisConfigStatus } = await import(
       "@/lib/linear/redis-actions"
     );
-    const configStatus = await checkRedisConfigStatus(organization.name);
+    const configStatus = await checkRedisConfigStatus(organization.urlKey);
     configSaved = configStatus.hasConfig;
     configExpired = configStatus.isExpired;
 
@@ -150,7 +150,7 @@ export default async function DashboardPage() {
             initialHasConfig={configSaved}
             initialIsExpired={configExpired}
             orgId={organization.id}
-            orgName={organization.name}
+            orgSlug={organization.urlKey}
           />
         )}
 
@@ -243,10 +243,12 @@ export default async function DashboardPage() {
           ) : (
             <div className="border rounded-lg p-6 space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Get Started with a Subscription</h3>
+                <h3 className="font-semibold mb-2">
+                  Get Started with a Subscription
+                </h3>
                 <p className="text-sm text-muted-foreground">
-                  Subscribe to unlock AI-powered job descriptions and candidate screenings.
-                  Choose a plan that fits your hiring needs.
+                  Subscribe to unlock AI-powered job descriptions and candidate
+                  screenings. Choose a plan that fits your hiring needs.
                 </p>
               </div>
               <Button asChild>
@@ -261,7 +263,8 @@ export default async function DashboardPage() {
                 Usage Data Unavailable
               </h3>
               <p className="text-sm text-yellow-700">
-                Unable to load usage meter data. You can still view and manage your subscription.
+                Unable to load usage meter data. You can still view and manage
+                your subscription.
               </p>
               <Button asChild variant="outline" size="sm" className="mt-2">
                 <Link href="/subscription">Manage Subscription</Link>
